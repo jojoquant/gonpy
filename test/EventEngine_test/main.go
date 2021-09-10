@@ -18,7 +18,7 @@ func main() {
 	e := &engine.EventEngine{
 		Name:     "case1EventEngine",
 		Interval: 1,
-		Queue:    make(chan *trader.Event, 0),
+		Queue:    make(chan *trader.Event,10),
 		Active:   false,
 		Thread:   "",
 		Timer:    "",
@@ -34,9 +34,9 @@ func main() {
 	e.Register("eTimer", ETimerHandlerFunc)
 	e.Register("eTimer", ETimerHandlerFunc)
 	fmt.Println(e)
-	e.Unregister("eTimer", ETimerHandlerFunc)
-	e.Unregister("eTimer", ETimerHandlerFunc)
-	fmt.Println(e)
+	// e.Unregister("eTimer", ETimerHandlerFunc)
+	// e.Unregister("eTimer", ETimerHandlerFunc)
+	// fmt.Println(e)
 
 	e.Start()
 	e.Put(event1)

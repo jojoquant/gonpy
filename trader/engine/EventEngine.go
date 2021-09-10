@@ -25,18 +25,14 @@ type EventEngine struct {
 type HandlerFunc func(event *trader.Event)
 
 func (e *EventEngine) run() {
-	for {
-		if e.Active {
-			event := <-e.Queue
-			e.Process(event)
-		}
-	}
-}
-
-func (e *EventEngine) runTimer() {
+	ticker := time.NewTicker(time.Duration(e.Interval) * time.Second)
 	for e.Active {
-		time.Sleep(time.Duration(e.Interval) * time.Second)
-		e.Put(&trader.Event{trader.EVENT_TIMER, time.Now()})
+		select {
+		case event := <-e.Queue:
+			e.Process(event)
+		case <-ticker.C:
+			e.Put(&trader.Event{Type: trader.EVENT_TIMER, Data: time.Now()})
+		}
 	}
 }
 
@@ -45,13 +41,13 @@ func (e *EventEngine) Process(event *trader.Event) {
 	if handlersExist {
 		for i, handler := range handlers {
 			fmt.Println(i, handler)
-			handler(event)
+			go handler(event)
 		}
 	}
 
 	if len(e.GeneralHandlers) != 0 {
 		for _, generalHandler := range e.GeneralHandlers {
-			generalHandler(event)
+			go generalHandler(event)
 		}
 	}
 
@@ -59,10 +55,8 @@ func (e *EventEngine) Process(event *trader.Event) {
 
 func (e *EventEngine) Start() {
 	e.Active = true
-	wg.Add(2)
+	// wg.Add(1)
 	go e.run()
-	go e.runTimer()
-
 }
 
 func (e *EventEngine) Stop() {
