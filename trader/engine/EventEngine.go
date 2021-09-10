@@ -16,13 +16,24 @@ type EventEngine struct {
 	Queue    chan *trader.Event
 	Active   bool
 
-	Thread          string
-	Timer           string
 	Handlers        map[string][]HandlerFunc
 	GeneralHandlers []HandlerFunc
 }
 
 type HandlerFunc func(event *trader.Event)
+
+func NewEventEngine() *EventEngine {
+	// 这里真特殊, 不能直接return, 必须有个变量接然后return
+	engine := &EventEngine{
+		Name:     "EventEngine",
+		Interval: 1,
+		Queue:    make(chan *trader.Event, 10),
+		Active:   false,
+
+		Handlers: map[string][]HandlerFunc{},
+	}
+	return engine 
+}
 
 func (e *EventEngine) run() {
 	ticker := time.NewTicker(time.Duration(e.Interval) * time.Second)

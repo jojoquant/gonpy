@@ -15,21 +15,14 @@ func ETimerHandlerFunc2(event *trader.Event) {
 }
 
 func main() {
-	e := &engine.EventEngine{
-		Name:     "case1EventEngine",
-		Interval: 1,
-		Queue:    make(chan *trader.Event,10),
-		Active:   false,
-		Thread:   "",
-		Timer:    "",
-		Handlers: map[string][]engine.HandlerFunc{
-			"eTimer":  {},
-			"eTimer2": {ETimerHandlerFunc, ETimerHandlerFunc2},
-		},
+	e := engine.NewEventEngine()
+	e.Handlers = map[string][]engine.HandlerFunc{
+		"eTimer":  {},
+		"eTimer2": {ETimerHandlerFunc, ETimerHandlerFunc2},
 	}
 	event1 := &trader.Event{Type: "eTimer", Data: "123"}
 	event2 := &trader.Event{Type: "eTimer2", Data: "12333"}
-	
+
 	e.Register("eTimer", ETimerHandlerFunc)
 	e.Register("eTimer", ETimerHandlerFunc)
 	e.Register("eTimer", ETimerHandlerFunc)
@@ -41,9 +34,8 @@ func main() {
 	e.Start()
 	e.Put(event1)
 	e.Put(event2)
-	time.Sleep(2*time.Second)
+	time.Sleep(2 * time.Second)
 	// e.Stop()
 
-	
-	select{}
+	select {}
 }
