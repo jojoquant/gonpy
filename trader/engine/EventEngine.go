@@ -41,12 +41,14 @@ func (e *EventEngine) Process(event *trader.Event) {
 	if handlersExist {
 		for i, handler := range handlers {
 			fmt.Println(i, handler)
+			wg.Add(1)
 			go handler(event)
 		}
 	}
 
 	if len(e.GeneralHandlers) != 0 {
 		for _, generalHandler := range e.GeneralHandlers {
+			wg.Add(1)
 			go generalHandler(event)
 		}
 	}
@@ -55,7 +57,7 @@ func (e *EventEngine) Process(event *trader.Event) {
 
 func (e *EventEngine) Start() {
 	e.Active = true
-	// wg.Add(1)
+	wg.Add(1)
 	go e.run()
 }
 
