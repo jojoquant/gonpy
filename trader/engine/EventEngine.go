@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"fmt"
 	"gonpy/trader"
 	"reflect"
 	"sync"
@@ -18,6 +17,8 @@ type EventEngine struct {
 
 	Handlers        map[string][]HandlerFunc
 	GeneralHandlers []HandlerFunc
+
+	sync.Mutex
 }
 
 type HandlerFunc func(event *trader.Event)
@@ -32,7 +33,7 @@ func NewEventEngine() *EventEngine {
 
 		Handlers: map[string][]HandlerFunc{},
 	}
-	return engine 
+	return engine
 }
 
 func (e *EventEngine) run() {
@@ -45,13 +46,13 @@ func (e *EventEngine) run() {
 			e.Put(&trader.Event{Type: trader.EVENT_TIMER, Data: time.Now()})
 		}
 	}
+	ticker.Stop()
 }
 
 func (e *EventEngine) Process(event *trader.Event) {
-	handlers, handlersExist := e.Handlers[event.Type]
-	if handlersExist {
-		for i, handler := range handlers {
-			fmt.Println(i, handler)
+
+	if handlers, handlersExist := e.Handlers[event.Type]; handlersExist {
+		for _, handler := range handlers {
 			wg.Add(1)
 			go handler(event)
 		}
@@ -75,6 +76,7 @@ func (e *EventEngine) Start() {
 func (e *EventEngine) Stop() {
 	e.Active = false
 	wg.Done()
+	close(e.Queue)
 }
 
 func (e *EventEngine) Put(event *trader.Event) {
@@ -82,29 +84,34 @@ func (e *EventEngine) Put(event *trader.Event) {
 }
 
 func (e *EventEngine) Register(Type string, handler HandlerFunc) {
+
 	if value, ok := e.Handlers[Type]; ok {
 		for _, item := range value {
 			if reflect.ValueOf(item).Pointer() == reflect.ValueOf(handler).Pointer() {
 				return
 			}
 		}
+		e.Lock()
 		e.Handlers[Type] = append(value, handler)
+		e.Unlock()
 	}
+
 }
 
 func (e *EventEngine) Unregister(Type string, handler HandlerFunc) {
 	if value, ok := e.Handlers[Type]; ok {
 		for index, item := range value {
 			if reflect.ValueOf(item).Pointer() == reflect.ValueOf(handler).Pointer() {
-
+				
+				e.Lock()
 				if index == len(value)-1 {
 					e.Handlers[Type] = value[:index]
 					return
 				}
-
 				e.Handlers[Type] = append(value[:index], value[index+1:]...)
+				e.Unlock()
 			}
 		}
-
 	}
+
 }

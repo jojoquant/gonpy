@@ -27,7 +27,7 @@ func main() {
 	e.Register("eTimer", ETimerHandlerFunc)
 	e.Register("eTimer", ETimerHandlerFunc)
 	fmt.Println(e)
-	// e.Unregister("eTimer", ETimerHandlerFunc)
+	
 	// e.Unregister("eTimer", ETimerHandlerFunc)
 	// fmt.Println(e)
 
@@ -35,6 +35,7 @@ func main() {
 	e.Put(event1)
 	e.Put(event2)
 	time.Sleep(2 * time.Second)
+	e.Unregister("eTimer", ETimerHandlerFunc)
 	// e.Stop()
 
 	select {}
