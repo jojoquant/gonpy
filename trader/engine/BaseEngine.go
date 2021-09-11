@@ -1,10 +1,9 @@
 package engine
 
-
-type BaseEngineInterface interface{
-	close()
+type BaseEnginer interface {
+	Close()
+	GetName() string
+	SetEventEngine(eventEngine *EventEngine)
 }
 
-type BaseEngine struct{
-	name string
-}
+
