@@ -6,4 +6,9 @@ type BaseEnginer interface {
 	SetEventEngine(eventEngine *EventEngine)
 }
 
+type BaseEngine struct{
+	Name        string
+	EventEngine *EventEngine
+}
+
 

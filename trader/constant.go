@@ -1,6 +1,7 @@
 package trader
 
 type Exchange string
+
 const (
 	// Chinese
 	CFFEX Exchange = "CFFEX" // China Financial Futures Exchange
@@ -64,13 +65,91 @@ const (
 )
 
 type LogLevel int
+
 const (
 	CRITICAL LogLevel = 50
-	FATAL LogLevel = CRITICAL
-	ERROR LogLevel = 40
-	WARNING LogLevel = 30
-	WARN LogLevel = WARNING
-	INFO LogLevel = 20
-	DEBUG LogLevel = 10
-	NOTSET LogLevel = 0
+	FATAL    LogLevel = CRITICAL
+	ERROR    LogLevel = 40
+	WARNING  LogLevel = 30
+	WARN     LogLevel = WARNING
+	INFO     LogLevel = 20
+	DEBUG    LogLevel = 10
+	NOTSET   LogLevel = 0
+)
+
+type BacktestMode int
+
+const (
+	BarMode  BacktestMode = 1
+	TickMode BacktestMode = 2
+)
+
+type OrderType string
+
+const (
+	LIMIT  OrderType = "限价"
+	MARKET OrderType = "市价"
+	STOP   OrderType = "STOP"
+	FAK    OrderType = "FAK"
+	FOK    OrderType = "FOK"
+	RFQ    OrderType = "询价"
+)
+
+type Direction string
+
+const (
+	// Direction of order/trade/position.
+	LONG  Direction = "多"
+	SHORT Direction = "空"
+	NET   Direction = "净"
+)
+
+type Offset string
+
+const (
+	//Offset of order/trade.
+	NONE           Offset = ""
+	OPEN           Offset = "开"
+	CLOSE          Offset = "平"
+	CLOSETODAY     Offset = "平今"
+	CLOSEYESTERDAY Offset = "平昨"
+)
+
+type Status string
+
+const (
+	// Order status.
+	SUBMITTING Status = "提交中"
+	NOTTRADED  Status = "未成交"
+	PARTTRADED Status = "部分成交"
+	ALLTRADED  Status = "全部成交"
+	CANCELLED  Status = "已撤销"
+	REJECTED   Status = "拒单"
+)
+
+type Product string
+
+const (
+	EQUITY  Product = "股票"
+	FUTURES Product = "期货"
+	OPTION  Product = "期权"
+	INDEX   Product = "指数"
+	FOREX   Product = "外汇"
+	SPOT    Product = "现货"
+	ETF     Product = "ETF"
+	BOND    Product = "债券"
+	WARRANT Product = "权证"
+	SPREAD  Product = "价差"
+	FUND    Product = "基金"
+)
+
+type Interval string
+
+const (
+	// Interval of bar data.
+	MINUTE Interval = "1m"
+	HOUR   Interval = "1h"
+	DAILY  Interval = "d"
+	WEEKLY Interval = "w"
+	TICK   Interval = "tick"
 )

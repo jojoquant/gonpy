@@ -3,9 +3,8 @@ package engine
 import "fmt"
 
 type CtaEngine struct {
-	BaseEnginer
-	Name        string
-	EventEngine *EventEngine
+	// BaseEnginer
+	BaseEngine
 }
 
 func (c *CtaEngine) Close() {
