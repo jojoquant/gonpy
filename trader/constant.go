@@ -95,6 +95,12 @@ const (
 	RFQ    OrderType = "询价"
 )
 
+type OptionType string
+const(
+	CALL OptionType = "看涨期权"
+	PUT OptionType = "看跌期权"
+)
+
 type Direction string
 
 const (

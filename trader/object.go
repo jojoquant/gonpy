@@ -46,7 +46,7 @@ type OrderData struct {
 
 func NewOrderData(
 	gateway, symbol string, exchange Exchange,
-	orderId string, orderType OrderType, direction Direction, offset Offset, 
+	orderId string, orderType OrderType, direction Direction, offset Offset,
 	price, volume, traded float64, status Status,
 	datetime time.Time,
 ) *OrderData {
@@ -54,11 +54,11 @@ func NewOrderData(
 		OrderId:   orderId,
 		OrderType: orderType,
 		Direction: direction,
-		Offset:   offset,
+		Offset:    offset,
 
 		Price:    price,
 		Volume:   volume,
-		Traded: traded,
+		Traded:   traded,
 		Status:   status,
 		Datetime: datetime,
 	}
@@ -80,7 +80,7 @@ func NewOrderData(
 	return order
 }
 
-type TraderData struct {
+type TradeData struct {
 	BaseData
 	VtOrderId string // "gateway.OrderId"
 	VtTradeId string // "gateway.TradeId"
@@ -101,9 +101,9 @@ func NewTradeData(
 	exchange Exchange, direction Direction, offset Offset,
 	price, volume float64,
 	datetime time.Time,
-) *TraderData {
+) *TradeData {
 
-	trade := &TraderData{
+	trade := &TradeData{
 		OrderId:   orderId,
 		TradeId:   tradeId,
 		Direction: direction,
@@ -121,4 +121,37 @@ func NewTradeData(
 	trade.VtTradeId = fmt.Sprintf("%s.%s", gateway, tradeId)
 
 	return trade
+}
+
+type ContractData struct {
+	BaseData
+	Name      string
+	Product   Product
+	Size      float64
+	PriceTick float64
+
+	MinVolume   float64
+	StopSupport bool
+	NetPosition bool
+	HistoryData bool
+
+	OptionStrike     float64
+	OptionUnderlying string
+	OptionType       OptionType
+	OptionExpiry     time.Time
+	OptionPortfolio  string
+	OptionIndex      string
+}
+
+func NewContractData(gateway, symbol string,
+	exchange Exchange, direction Direction, offset Offset,
+	price, volume float64,
+) *ContractData {
+
+	contract := &ContractData{}
+	contract.Symbol = symbol
+	contract.Exchange = exchange
+	contract.VtSymbol = fmt.Sprintf("%s.%s", symbol, exchange)
+	contract.Gateway = gateway
+	return contract
 }

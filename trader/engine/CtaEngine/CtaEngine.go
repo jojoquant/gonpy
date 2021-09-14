@@ -1,10 +1,13 @@
-package engine
+package CtaEngine
 
-import "fmt"
+import (
+	"fmt"
+	"gonpy/trader/engine"
+)
 
 type CtaEngine struct {
 	// BaseEnginer
-	BaseEngine
+	engine.BaseEngine
 }
 
 func (c *CtaEngine) Close() {
@@ -15,11 +18,11 @@ func (c *CtaEngine) GetName() string {
 	return c.Name
 }
 
-func (c *CtaEngine) SetEventEngine(eventEngine *EventEngine) {
+func (c *CtaEngine) SetEventEngine(eventEngine *engine.EventEngine) {
 	c.EventEngine = eventEngine
 }
 
-func NewCtaEngine(eventEngine *EventEngine) *CtaEngine {
+func NewCtaEngine(eventEngine *engine.EventEngine) *CtaEngine {
 	c := &CtaEngine{}
 	c.Name = "CtaEngine"
 	c.EventEngine = eventEngine

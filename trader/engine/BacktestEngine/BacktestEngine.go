@@ -5,6 +5,7 @@ import (
 	"gonpy/trader"
 	"gonpy/trader/database"
 	"gonpy/trader/engine"
+	"gonpy/trader/strategy"
 	"gonpy/trader/util"
 	"log"
 	"math"
@@ -71,13 +72,17 @@ func NewBacktestEngine(param Parameters) *BacktestEngine {
 	return b
 }
 
-func (b *BacktestEngine) Close() {}
+func (b *BacktestEngine) Close() {
+	fmt.Println("backtest engine close")
+}
 
 func (b *BacktestEngine) GetName() string {
 	return b.Name
 }
 
-func (b *BacktestEngine) SetEventEngine(eventEngine *engine.EventEngine) {}
+func (b *BacktestEngine) SetEventEngine(eventEngine *engine.EventEngine) {
+	b.EventEngine = eventEngine
+}
 
 func (b *BacktestEngine) LoadData() {
 	if b.Start.After(b.End) {
@@ -265,4 +270,26 @@ func(b *BacktestEngine)UpdateDailyClose(close float64){
 	}else{
 		b.DailyResults[date] = NewDailyResult(date, close)
 	}
+}
+
+func(b *BacktestEngine)SendOrder(
+	strategy *strategy.Strategy, 
+	direction trader.Direction,
+	offset trader.Offset, 
+	price, volume float64,
+	stop, lock bool)string{
+	
+	var vtOrderId string
+	price:= util.RoundTo(price, b.PriceTick)
+	if stop{
+		vtOrderId = b.SendStopOrder(strategy,)
+	}
+}
+
+func(b *BacktestEngine)SendStopOrder(
+	strategy *Strategy, contract *trader.ContractData, 
+	direction trader.Direction, offset trader.Offset,
+	price, volume float64, lock bool,
+)string{
+
 }
