@@ -62,8 +62,6 @@ func NewMongoDB(host string, port int)*MongoDB{
 	return m
 }
 
-
-
 func (m *MongoDB) Query(q *QueryParam) []*BarCollection {
 	collection := m.client.Database(q.Db).Collection(q.Collection)
 	cur, err := collection.Find(context.TODO(), q.Filter)

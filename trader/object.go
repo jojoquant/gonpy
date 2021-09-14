@@ -6,10 +6,10 @@ import (
 )
 
 type BaseData struct {
-	Gateway string
+	Gateway  string
 	Symbol   string
 	Exchange Exchange
-	VtSymbol  string // "symbol.exchange"	
+	VtSymbol string // "symbol.exchange"
 }
 
 type LogData struct {
@@ -42,6 +42,42 @@ type OrderData struct {
 	Datetime time.Time
 
 	IsActive bool
+}
+
+func NewOrderData(
+	gateway, symbol string, exchange Exchange,
+	orderId string, orderType OrderType, direction Direction, offset Offset, 
+	price, volume, traded float64, status Status,
+	datetime time.Time,
+) *OrderData {
+	order := &OrderData{
+		OrderId:   orderId,
+		OrderType: orderType,
+		Direction: direction,
+		Offset:   offset,
+
+		Price:    price,
+		Volume:   volume,
+		Traded: traded,
+		Status:   status,
+		Datetime: datetime,
+	}
+	order.Symbol = symbol
+	order.Exchange = exchange
+	order.VtSymbol = fmt.Sprintf("%s.%s", symbol, exchange)
+
+	order.Gateway = gateway
+	order.VtOrderId = fmt.Sprintf("%s.%s", gateway, orderId)
+
+	for _, s := range ACTIVE_STATUSES {
+		if s == status {
+			order.IsActive = true
+			break
+		}
+		order.IsActive = false
+	}
+
+	return order
 }
 
 type TraderData struct {
@@ -78,8 +114,8 @@ func NewTradeData(
 	}
 	trade.Symbol = symbol
 	trade.Exchange = exchange
-	trade.VtSymbol= fmt.Sprintf("%s.%s", symbol, exchange)
-	
+	trade.VtSymbol = fmt.Sprintf("%s.%s", symbol, exchange)
+
 	trade.Gateway = gateway
 	trade.VtOrderId = fmt.Sprintf("%s.%s", gateway, orderId)
 	trade.VtTradeId = fmt.Sprintf("%s.%s", gateway, tradeId)

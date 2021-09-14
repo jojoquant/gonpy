@@ -125,7 +125,13 @@ const (
 	ALLTRADED  Status = "全部成交"
 	CANCELLED  Status = "已撤销"
 	REJECTED   Status = "拒单"
+
+	// stop order 额外字段
+	WAITING Status = "等待中"
+	TRIGGERED Status = "已触发"
 )
+
+var ACTIVE_STATUSES [3]Status = [3]Status{SUBMITTING, NOTTRADED, PARTTRADED}
 
 type Product string
 
