@@ -1,14 +1,15 @@
 package strategy
 
 import (
-	"gonpy/trader"
+	. "gonpy/trader/object"
+	. "gonpy/trader"
 )
 
 type TradeEnginer interface {
 	SendOrder(
 		strategy *Strategy, 
-		direction trader.Direction,
-		offset trader.Offset, 
+		direction Direction,
+		offset Offset, 
 		price, volume float64,
 		stop, lock bool,
 	)string
@@ -16,14 +17,14 @@ type TradeEnginer interface {
 	CancelAll(strategy *Strategy)
 
 	SendStopOrder(
-		strategy *Strategy, contract *trader.ContractData, 
-		direction trader.Direction, offset trader.Offset,
+		strategy *Strategy, contract *ContractData, 
+		direction Direction, offset Offset,
 		price, volume float64, lock bool,
 	)string
 
 	SendLimitOrder(
-		strategy *Strategy, contract *trader.ContractData, 
-		direction trader.Direction, offset trader.Offset,
+		strategy *Strategy, contract *ContractData, 
+		direction Direction, offset Offset,
 		price, volume float64, lock bool,
 	)string
 }
@@ -57,7 +58,7 @@ func (s *Strategy) Short() {}
 func (s *Strategy) Cover() {}
 
 func (s *Strategy) SendOrder(
-	direction trader.Direction, offset trader.Offset,
+	direction Direction, offset Offset,
 	price, volume float64,
 	stop, lock bool)string {
 	

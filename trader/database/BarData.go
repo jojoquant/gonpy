@@ -2,11 +2,11 @@ package database
 
 import (
 	"time"
-	"gonpy/trader"
+	. "gonpy/trader/object"
 )
 
 type BarData struct {
-	trader.BaseData
+	BaseData
 	Open         float64
 	High         float64
 	Low          float64

@@ -2,7 +2,7 @@ package engine
 
 import (
 	"fmt"
-	"gonpy/trader"
+	. "gonpy/trader/object"
 	"gonpy/trader/database"
 )
 
@@ -10,8 +10,8 @@ type OmsEngine struct {
 	// BaseEnginer
 	BaseEngine
 	Ticks map[string]*database.TickData
-	Orders map[string]*trader.OrderData
-	Trades map[string]*trader.TradeData
+	Orders map[string]*OrderData
+	Trades map[string]*TradeData
 }
 
 func (o *OmsEngine) Close() {

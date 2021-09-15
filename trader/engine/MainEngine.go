@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"gonpy/trader"
 	"gonpy/trader/gateway"
+	"gonpy/trader/object"
 )
 
 type MainEngine struct {
@@ -59,7 +60,7 @@ func (m *MainEngine) WriteLog(msg, source string) {
 	m.EventEngine.Put(
 		&trader.Event{
 			Type: trader.EVENT_LOG,
-			Data: trader.NewLogData(msg, source),
+			Data: object.NewLogData(msg, source),
 		},
 	)
 }

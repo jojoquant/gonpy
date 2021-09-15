@@ -1,12 +1,12 @@
 package database
 
 import (
-	"gonpy/trader"
+	. "gonpy/trader/object"
 	"time"
 )
 
 type TickData struct {
-	trader.BaseData
+	BaseData
 
 	Name string
 

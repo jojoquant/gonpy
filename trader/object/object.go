@@ -1,8 +1,9 @@
-package trader
+package object
 
 import (
 	"fmt"
 	"time"
+	. "gonpy/trader"
 )
 
 type BaseData struct {

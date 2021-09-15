@@ -1,7 +1,8 @@
 package BacktestEngine
 
 import (
-	"gonpy/trader"
+	. "gonpy/trader/object"
+	. "gonpy/trader"
 )
 
 type DailyResult struct {
@@ -9,7 +10,7 @@ type DailyResult struct {
 	ClosePrice float64
 	PreClose   float64
 
-	Trades     []*trader.TraderData
+	Trades     []*TradeData
 	TradeCount int
 
 	StartPos float64
@@ -33,7 +34,7 @@ func NewDailyResult(date string, closePrice float64)*DailyResult{
 	return d
 }
 
-func (d *DailyResult) AddTrade(trade *trader.TraderData) {
+func (d *DailyResult) AddTrade(trade *TradeData) {
 	d.Trades = append(d.Trades, trade)
 }
 
@@ -64,7 +65,7 @@ func (d *DailyResult) CalculatePnl(
 	var turnover float64
 	for _, trade := range d.Trades {
 
-		if trade.Direction == trader.LONG {
+		if trade.Direction == LONG {
 			posChange = trade.Volume
 		} else {
 			// 这里包含 SHORT 和 NET

@@ -2,7 +2,8 @@ package BacktestEngine
 
 import (
 	"fmt"
-	"gonpy/trader"
+	. "gonpy/trader/object"
+	. "gonpy/trader"
 	"gonpy/trader/database"
 	"gonpy/trader/engine"
 	"gonpy/trader/strategy"
@@ -28,7 +29,7 @@ type Parameters struct {
 	RiskFree   float64
 	AnnualDays int
 
-	Mode    trader.BacktestMode
+	Mode    BacktestMode
 	Inverse bool
 }
 
@@ -39,28 +40,28 @@ type BacktestEngine struct {
 	Gateway string
 
 	Strategy        string
-	Bar             *database.BarCollection
-	Tick            *database.TickCollection
+	Bar             *database.BarData
+	Tick            *database.TickData
 	Datetime        time.Time
 
 	Database        *database.MongoDB
 	
-	Interval        trader.Interval
+	Interval        Interval
 	Days			int
 	Callback        string
-	HistoryBarData  []*database.BarCollection
-	HistoryTickData []*database.TickCollection
+	HistoryBarData  []*database.BarData
+	HistoryTickData []*database.TickData
 
-	ActiveLimitOrders map[string]*trader.OrderData
-	LimitOrders      map[string]*trader.OrderData
+	ActiveLimitOrders map[string]*OrderData
+	LimitOrders      map[string]*OrderData
 	LimitOrderCount  int
 
-	ActiveStopOrders map[string]*trader.OrderData
-	StopOrders      map[string]*trader.OrderData
+	ActiveStopOrders map[string]*OrderData
+	StopOrders      map[string]*OrderData
 	StopOrderCount  int
 
 	TradeCount int
-	Trades     map[string]*trader.TraderData
+	Trades     map[string]*TradeData
 
 	DailyResults map[string]*DailyResult
 }
@@ -105,7 +106,7 @@ func (b *BacktestEngine) LoadData() {
 
 func (b *BacktestEngine) AddStrategy() {}
 
-func (b *BacktestEngine) NewBar(bar *database.BarCollection) {
+func (b *BacktestEngine) NewBar(bar *database.BarData) {
 	b.Bar = bar
 	b.Datetime = bar.Datetime
 
@@ -122,25 +123,25 @@ func (b *BacktestEngine) CrossLimitOrder() {
 	var longBestPrice float64
 	var shortBestPrice float64
 
-	if b.Mode == trader.BarMode {
+	if b.Mode == BarMode {
 		longCrossPrice = b.Bar.Low
 		shortCrossPrice = b.Bar.High
 		longBestPrice = b.Bar.Open
 		shortBestPrice = b.Bar.Open
-	} else if b.Mode == trader.TickMode {
+	} else if b.Mode == TickMode {
 		log.Println("Tick mode TODO")
 	}
 
 	for _, limitOrder := range b.ActiveLimitOrders {
-		if limitOrder.Status == trader.SUBMITTING {
-			limitOrder.Status = trader.NOTTRADED
+		if limitOrder.Status == SUBMITTING {
+			limitOrder.Status = NOTTRADED
 			// TODO 传入策略中的响应函数中
 			// b.strategy.OnOrder(order)
 		}
 
 		// Check whether limit order can be filled
-		longCross := (limitOrder.Direction == trader.LONG && limitOrder.Price >= longCrossPrice && longCrossPrice > 0)
-		shortCross := (limitOrder.Direction == trader.SHORT && limitOrder.Price <= shortCrossPrice && shortCrossPrice > 0)
+		longCross := (limitOrder.Direction == LONG && limitOrder.Price >= longCrossPrice && longCrossPrice > 0)
+		shortCross := (limitOrder.Direction == SHORT && limitOrder.Price <= shortCrossPrice && shortCrossPrice > 0)
 
 		if !longCross && !shortCross {
 			continue
@@ -148,7 +149,7 @@ func (b *BacktestEngine) CrossLimitOrder() {
 
 		// Push order update with status "all traded" (filled)
 		limitOrder.Traded = limitOrder.Volume
-		limitOrder.Status = trader.ALLTRADED
+		limitOrder.Status = ALLTRADED
 		// TODO 传入策略中的响应函数中
 		// b.strategy.OnOrder(order)
 		delete(b.ActiveLimitOrders, limitOrder.VtOrderId)
@@ -164,7 +165,7 @@ func (b *BacktestEngine) CrossLimitOrder() {
 			posChange = -limitOrder.Volume
 		}
 
-		trade := trader.NewTradeData(
+		trade := NewTradeData(
 			b.Gateway, limitOrder.Symbol, limitOrder.OrderId,
 			fmt.Sprintf("%d", b.TradeCount),
 			limitOrder.Exchange, limitOrder.Direction, limitOrder.Offset,
@@ -184,25 +185,25 @@ func (b *BacktestEngine) CrossStopOrder() {
 	var longBestPrice float64
 	var shortBestPrice float64
 
-	if b.Mode == trader.BarMode {
+	if b.Mode == BarMode {
 		longCrossPrice = b.Bar.High
 		shortCrossPrice = b.Bar.Low
 		longBestPrice = b.Bar.Open
 		shortBestPrice = b.Bar.Open
-	} else if b.Mode == trader.TickMode {
+	} else if b.Mode == TickMode {
 		log.Println("Tick mode TODO")
 	}
 
 	for _, stopOrder := range b.ActiveStopOrders {
-		// if order.Status == trader.SUBMITTING {
-		// 	order.Status = trader.NOTTRADED
+		// if order.Status == SUBMITTING {
+		// 	order.Status = NOTTRADED
 		// 	// TODO 传入策略中的响应函数中
 		// 	// b.strategy.OnOrder(order)
 		// }
 
 		// Check whether limit order can be filled
-		longCross := (stopOrder.Direction == trader.LONG && stopOrder.Price <= longCrossPrice && longCrossPrice > 0)
-		shortCross := (stopOrder.Direction == trader.SHORT && stopOrder.Price >= shortCrossPrice && shortCrossPrice > 0)
+		longCross := (stopOrder.Direction == LONG && stopOrder.Price <= longCrossPrice && longCrossPrice > 0)
+		shortCross := (stopOrder.Direction == SHORT && stopOrder.Price >= shortCrossPrice && shortCrossPrice > 0)
 
 		if !longCross && !shortCross {
 			continue
@@ -210,7 +211,7 @@ func (b *BacktestEngine) CrossStopOrder() {
 
 		// Push order update with status "all traded" (filled)
 		// order.Traded = order.Volume
-		// order.Status = trader.ALLTRADED
+		// order.Status = ALLTRADED
 		// TODO 传入策略中的响应函数中
 		// b.strategy.OnOrder(order)
 		// delete(b.ActiveLimitOrders, order.VtOrderId)
@@ -218,11 +219,11 @@ func (b *BacktestEngine) CrossStopOrder() {
 		// turn stop order into limit order
 		b.LimitOrderCount++
 		// limit orderId +1 
-		fromStopToLimitOrder := trader.NewOrderData(
+		fromStopToLimitOrder := NewOrderData(
 			stopOrder.Gateway, stopOrder.Symbol,stopOrder.Exchange,
-			fmt.Sprint(b.LimitOrderCount), trader.LIMIT, stopOrder.Direction,
+			fmt.Sprint(b.LimitOrderCount), LIMIT, stopOrder.Direction,
 			stopOrder.Offset,stopOrder.Price,stopOrder.Volume,stopOrder.Volume,
-			trader.ALLTRADED, b.Datetime,
+			ALLTRADED, b.Datetime,
 		)
 
 		b.LimitOrders[fromStopToLimitOrder.VtOrderId] = fromStopToLimitOrder
@@ -239,7 +240,7 @@ func (b *BacktestEngine) CrossStopOrder() {
 		
 		b.TradeCount++
 
-		trade := trader.NewTradeData(
+		trade := NewTradeData(
 			b.Gateway, fromStopToLimitOrder.Symbol, fromStopToLimitOrder.OrderId,
 			fmt.Sprintf("%d", b.TradeCount),
 			fromStopToLimitOrder.Exchange, fromStopToLimitOrder.Direction, fromStopToLimitOrder.Offset,
@@ -249,7 +250,7 @@ func (b *BacktestEngine) CrossStopOrder() {
 
 		// Update stop order
 		// stop_order.vt_orderids 这里没有按照vnpy写, 感觉没什么用
-		stopOrder.Status = trader.TRIGGERED
+		stopOrder.Status = TRIGGERED
 		// stop order 状态变为 triggered 存回StopOrders中 
 		b.StopOrders[stopOrder.VtOrderId] = stopOrder
 		delete(b.ActiveStopOrders, stopOrder.OrderId)
@@ -274,22 +275,24 @@ func(b *BacktestEngine)UpdateDailyClose(close float64){
 
 func(b *BacktestEngine)SendOrder(
 	strategy *strategy.Strategy, 
-	direction trader.Direction,
-	offset trader.Offset, 
+	direction Direction,
+	offset Offset, 
 	price, volume float64,
 	stop, lock bool)string{
 	
-	var vtOrderId string
-	price:= util.RoundTo(price, b.PriceTick)
-	if stop{
-		vtOrderId = b.SendStopOrder(strategy,)
-	}
+	// var vtOrderId string
+	// price:= util.RoundTo(price, b.PriceTick)
+	// if stop{
+	// 	vtOrderId = b.SendStopOrder(strategy,)
+	// }
+
+	return ""
 }
 
 func(b *BacktestEngine)SendStopOrder(
-	strategy *Strategy, contract *trader.ContractData, 
-	direction trader.Direction, offset trader.Offset,
+	strategy *strategy.Strategy, contract *ContractData, 
+	direction Direction, offset Offset,
 	price, volume float64, lock bool,
 )string{
-
+	return ""
 }
