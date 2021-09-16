@@ -20,25 +20,28 @@ type OrderData struct {
 	Traded   float64
 	Status   Status
 	Datetime time.Time
+	Reference string
 
 	IsActive bool
 }
 
+// OrderType 默认为 LIMIT 
+// Traded 默认为 0.0
+// Reference 默认为 ""
 func NewOrderData(
 	gateway, symbol string, exchange Exchange,
-	orderId string, orderType OrderType, direction Direction, offset Offset,
-	price, volume, traded float64, status Status,
+	orderId string, direction Direction, offset Offset,
+	price, volume float64, status Status,
 	datetime time.Time,
 ) *OrderData {
 	order := &OrderData{
 		OrderId:   orderId,
-		OrderType: orderType,
+		OrderType: LIMIT,
 		Direction: direction,
 		Offset:    offset,
 
 		Price:    price,
 		Volume:   volume,
-		Traded:   traded,
 		Status:   status,
 		Datetime: datetime,
 	}

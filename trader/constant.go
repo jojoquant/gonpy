@@ -137,7 +137,7 @@ const (
 	TRIGGERED Status = "已触发"
 )
 
-var ACTIVE_STATUSES [3]Status = [3]Status{SUBMITTING, NOTTRADED, PARTTRADED}
+var ACTIVE_STATUSES [4]Status = [4]Status{SUBMITTING, NOTTRADED, PARTTRADED, WAITING}
 
 type Product string
 

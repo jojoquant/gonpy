@@ -2,10 +2,10 @@ package BacktestEngine
 
 import (
 	"fmt"
-	. "gonpy/trader/object"
 	. "gonpy/trader"
 	"gonpy/trader/database"
 	"gonpy/trader/engine"
+	. "gonpy/trader/object"
 	"gonpy/trader/strategy"
 	"gonpy/trader/util"
 	"log"
@@ -18,7 +18,7 @@ import (
 type Parameters struct {
 	Symbol     string
 	VtSymbol   string
-	Exchange   string
+	Exchange   Exchange
 	Start      time.Time
 	End        time.Time
 	Rate       float64
@@ -29,8 +29,9 @@ type Parameters struct {
 	RiskFree   float64
 	AnnualDays int
 
-	Mode    BacktestMode
-	Inverse bool
+	Mode     BacktestMode
+	Interval Interval
+	Inverse  bool
 }
 
 type BacktestEngine struct {
@@ -39,26 +40,25 @@ type BacktestEngine struct {
 
 	Gateway string
 
-	Strategy        string
-	Bar             *database.BarData
-	Tick            *database.TickData
-	Datetime        time.Time
+	Strategy *strategy.Strategy
+	Bar      *database.BarData
+	Tick     *database.TickData
+	Datetime time.Time
 
-	Database        *database.MongoDB
-	
-	Interval        Interval
-	Days			int
+	Database *database.MongoDB
+
+	Days            int
 	Callback        string
 	HistoryBarData  []*database.BarData
 	HistoryTickData []*database.TickData
 
 	ActiveLimitOrders map[string]*OrderData
-	LimitOrders      map[string]*OrderData
-	LimitOrderCount  int
+	LimitOrders       map[string]*OrderData
+	LimitOrderCount   int
 
-	ActiveStopOrders map[string]*OrderData
-	StopOrders      map[string]*OrderData
-	StopOrderCount  int
+	ActiveStopOrders map[string]*StopOrderData
+	StopOrders       map[string]*StopOrderData
+	StopOrderCount   int
 
 	TradeCount int
 	Trades     map[string]*TradeData
@@ -218,16 +218,16 @@ func (b *BacktestEngine) CrossStopOrder() {
 
 		// turn stop order into limit order
 		b.LimitOrderCount++
-		// limit orderId +1 
+		// limit orderId +1
 		fromStopToLimitOrder := NewOrderData(
-			stopOrder.Gateway, stopOrder.Symbol,stopOrder.Exchange,
-			fmt.Sprint(b.LimitOrderCount), LIMIT, stopOrder.Direction,
-			stopOrder.Offset,stopOrder.Price,stopOrder.Volume,stopOrder.Volume,
+			stopOrder.Gateway, stopOrder.Symbol, stopOrder.Exchange,
+			fmt.Sprint(b.LimitOrderCount), stopOrder.Direction,
+			stopOrder.Offset, stopOrder.Price, stopOrder.Volume,
 			ALLTRADED, b.Datetime,
 		)
 
 		b.LimitOrders[fromStopToLimitOrder.VtOrderId] = fromStopToLimitOrder
-		
+
 		// create trade data
 		var tradePrice, posChange float64
 		if longCross {
@@ -237,7 +237,7 @@ func (b *BacktestEngine) CrossStopOrder() {
 			tradePrice = math.Min(fromStopToLimitOrder.Price, shortBestPrice)
 			posChange = -fromStopToLimitOrder.Volume
 		}
-		
+
 		b.TradeCount++
 
 		trade := NewTradeData(
@@ -251,7 +251,7 @@ func (b *BacktestEngine) CrossStopOrder() {
 		// Update stop order
 		// stop_order.vt_orderids 这里没有按照vnpy写, 感觉没什么用
 		stopOrder.Status = TRIGGERED
-		// stop order 状态变为 triggered 存回StopOrders中 
+		// stop order 状态变为 triggered 存回StopOrders中
 		b.StopOrders[stopOrder.VtOrderId] = stopOrder
 		delete(b.ActiveStopOrders, stopOrder.OrderId)
 
@@ -264,35 +264,66 @@ func (b *BacktestEngine) CrossStopOrder() {
 	}
 }
 
-func(b *BacktestEngine)UpdateDailyClose(close float64){
+func (b *BacktestEngine) UpdateDailyClose(close float64) {
 	date := b.Datetime.Format("2006-01-02")
-	if dailyResult,ok := b.DailyResults[date];ok{
+	if dailyResult, ok := b.DailyResults[date]; ok {
 		dailyResult.ClosePrice = close
-	}else{
+	} else {
 		b.DailyResults[date] = NewDailyResult(date, close)
 	}
 }
 
-func(b *BacktestEngine)SendOrder(
-	strategy *strategy.Strategy, 
+func (b *BacktestEngine) SendOrder(
+	strategy *strategy.Strategy,
 	direction Direction,
-	offset Offset, 
+	offset Offset,
 	price, volume float64,
-	stop, lock bool)string{
-	
-	// var vtOrderId string
-	// price:= util.RoundTo(price, b.PriceTick)
-	// if stop{
-	// 	vtOrderId = b.SendStopOrder(strategy,)
-	// }
+	stop, lock, net bool) string {
 
-	return ""
+	var vtOrderId string
+	var contract *ContractData
+	price = util.RoundTo(price, b.PriceTick)
+
+	if stop {
+		vtOrderId = b.SendStopOrder(strategy, contract, direction, offset, price, volume, false)
+	} else {
+		vtOrderId = b.SendLimitOrder(strategy, contract, direction, offset, price, volume, false)
+	}
+
+	return vtOrderId
 }
 
-func(b *BacktestEngine)SendStopOrder(
-	strategy *strategy.Strategy, contract *ContractData, 
+func (b *BacktestEngine) SendStopOrder(
+	strategy *strategy.Strategy, contract *ContractData,
 	direction Direction, offset Offset,
 	price, volume float64, lock bool,
-)string{
-	return ""
+) string {
+
+	b.StopOrderCount++
+	stopOrder := NewStopOrderData(
+		b.Gateway, b.Symbol, Exchange(b.Parameters.Exchange),
+		direction, offset, price, volume, strategy.Name,
+		fmt.Sprintf("STOP.%d", b.StopOrderCount), b.Datetime)
+
+	b.ActiveStopOrders[stopOrder.StopOrderId] = stopOrder
+	b.StopOrders[stopOrder.StopOrderId] = stopOrder
+
+	return stopOrder.StopOrderId
+}
+
+func (b *BacktestEngine) SendLimitOrder(
+	strategy *strategy.Strategy, contract *ContractData,
+	direction Direction, offset Offset,
+	price, volume float64, lock bool,
+) string {
+
+	b.LimitOrderCount++
+	order := NewOrderData(
+		b.Gateway, b.Symbol, b.Exchange, fmt.Sprintf("%d", b.LimitOrderCount),
+		direction, offset, price, volume, SUBMITTING, b.Datetime)
+
+	b.ActiveLimitOrders[order.VtOrderId] = order
+	b.LimitOrders[order.VtOrderId] = order
+
+	return order.VtOrderId
 }
