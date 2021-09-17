@@ -10,6 +10,7 @@ import (
 	"gonpy/trader/util"
 	"log"
 	"math"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -46,9 +47,11 @@ type BacktestEngine struct {
 	Datetime time.Time
 
 	Database *database.MongoDB
+	
 
 	Days            int
-	Callback        string
+	BarCallback        strategy.BarCallback
+	TickCallback        strategy.TickCallback
 	HistoryBarData  []*database.BarData
 	HistoryTickData []*database.TickData
 
@@ -66,10 +69,14 @@ type BacktestEngine struct {
 	DailyResults map[string]*DailyResult
 }
 
-func NewBacktestEngine(param Parameters) *BacktestEngine {
-	b := &BacktestEngine{}
-	b.Parameters = param
-	b.Gateway = "BacktestEngine"
+func NewBacktestEngine(param Parameters, database *database.MongoDB) *BacktestEngine {
+	b := &BacktestEngine{
+		Database: database,
+		Parameters: param,
+		Gateway: "BacktestEngine",
+	}
+	// b.Parameters = param
+	// b.Gateway = "BacktestEngine"
 	return b
 }
 
@@ -94,8 +101,7 @@ func (b *BacktestEngine) LoadData() {
 	log.Println("加载数据: ", b.Start, " -> ", b.End)
 	util.FuncExecDuration(func() { time.Sleep(2 * time.Second) })
 
-	m := database.NewMongoDB("192.168.0.113", 27017)
-	b.HistoryBarData = m.Query(
+	b.HistoryBarData = b.Database.Query(
 		&database.QueryParam{
 			Db:         "vnpy",
 			Collection: "SHFE_d_AUL8",
@@ -104,7 +110,71 @@ func (b *BacktestEngine) LoadData() {
 	)
 }
 
+func (b *BacktestEngine) LoadBar(vtSymbol string, days int, interval Interval, callback strategy.BarCallback, useDatabase bool){
+	b.Days = days
+	b.BarCallback = callback
+}
+
+func (b *BacktestEngine) LoadTick(vtSymbol string, days int, callback strategy.TickCallback, useDatabase bool){
+	b.Days = days
+	b.TickCallback = callback
+}
+
 func (b *BacktestEngine) AddStrategy() {}
+
+func (b *BacktestEngine) RunBacktest(){
+	
+	b.Strategy.OnInit()
+	
+	var index int
+	dayCount := 0
+	if b.Mode == BarMode{
+		for ix, data := range b.HistoryBarData{
+			if !b.Datetime.IsZero() && (data.Datetime.Day() != b.Datetime.Day()){
+				dayCount++
+				if dayCount >= b.Days{
+					break
+				}
+			}
+			
+			b.Datetime = data.Datetime
+			b.BarCallback(data)
+			index = ix
+		}
+
+		b.Strategy.Inited = true
+		log.Println("策略初始化完成")
+
+		b.Strategy.OnStart()
+		b.Strategy.Trading = true
+		
+		log.Println("开始回放 Bar 历史数据")
+		if len(b.HistoryBarData[index:]) <= 1{
+			log.Println("历史数据不足, 回测终止")
+			return
+		}
+
+		for i, data := range b.HistoryBarData{
+			b.NewBar(data)
+			log.Printf("当前回放进度: %d / %d \n", i, len(b.HistoryBarData[index:]))
+		}
+
+	}else if b.Mode == TickMode{
+		for _ , data := range b.HistoryTickData{
+			if !b.Datetime.IsZero() && (data.Datetime.Day() != b.Datetime.Day()){
+				dayCount++
+				if dayCount >= b.Days{
+					break
+				}
+			}
+			
+			b.Datetime = data.Datetime
+			b.TickCallback(data)
+			// index = ix
+		}
+		// function := b.NewTick
+	}
+}
 
 func (b *BacktestEngine) NewBar(bar *database.BarData) {
 	b.Bar = bar
@@ -112,9 +182,20 @@ func (b *BacktestEngine) NewBar(bar *database.BarData) {
 
 	b.CrossLimitOrder()
 	b.CrossStopOrder()
-	// b.Strategy.OnBar(bar)
+	b.Strategy.OnBar(bar)
 
 	b.UpdateDailyClose(bar.Close)
+}
+
+func (b *BacktestEngine) NewTick(tick *database.TickData) {
+	b.Tick = tick
+	b.Datetime = tick.Datetime
+
+	b.CrossLimitOrder()
+	b.CrossStopOrder()
+	b.Strategy.OnTick(tick)
+
+	b.UpdateDailyClose(tick.LastPrice)
 }
 
 func (b *BacktestEngine) CrossLimitOrder() {
@@ -303,7 +384,7 @@ func (b *BacktestEngine) SendStopOrder(
 	stopOrder := NewStopOrderData(
 		b.Gateway, b.Symbol, Exchange(b.Parameters.Exchange),
 		direction, offset, price, volume, strategy.Name,
-		fmt.Sprintf("STOP.%d", b.StopOrderCount), b.Datetime)
+		fmt.Sprintf("%s.%d", STOP, b.StopOrderCount), b.Datetime)
 
 	b.ActiveStopOrders[stopOrder.StopOrderId] = stopOrder
 	b.StopOrders[stopOrder.StopOrderId] = stopOrder
@@ -327,3 +408,39 @@ func (b *BacktestEngine) SendLimitOrder(
 
 	return order.VtOrderId
 }
+
+func (b *BacktestEngine) CancelOrder(strategy *strategy.Strategy, vtOrderId string) {
+	if strings.HasPrefix(vtOrderId, string(STOP)) {
+		b.CancelStopOrder(strategy, vtOrderId)
+	} else {
+		b.CancelLimitOrder(strategy, vtOrderId)
+	}
+
+}
+
+func (b *BacktestEngine) CancelStopOrder(strategy *strategy.Strategy, vtOrderId string) {
+	if order, ok := b.ActiveStopOrders[vtOrderId]; ok {
+		order.Status = CANCELLED
+		b.Strategy.OnStopOrder(order)
+		delete(b.ActiveStopOrders, vtOrderId)
+	}
+}
+
+func (b *BacktestEngine) CancelLimitOrder(strategy *strategy.Strategy, vtOrderId string) {
+	if order, ok := b.ActiveLimitOrders[vtOrderId]; ok {
+		order.Status = CANCELLED
+		b.Strategy.OnOrder(order)
+		delete(b.ActiveLimitOrders, vtOrderId)
+	}
+}
+
+func (b *BacktestEngine) CancelAll(s *strategy.Strategy) {
+	for vtOrderId := range b.ActiveLimitOrders {
+		b.CancelLimitOrder(s, vtOrderId)
+	}
+
+	for stopOrderId := range b.ActiveStopOrders {
+		b.CancelStopOrder(s, stopOrderId)
+	}
+}
+

@@ -1,69 +1,83 @@
 package strategy
 
 import (
-	. "gonpy/trader/object"
 	. "gonpy/trader"
+	"gonpy/trader/database"
+	. "gonpy/trader/object"
 )
 
+type TickCallback func(*database.TickData)
+type BarCallback func(*database.BarData)
+
 type TradeEnginer interface {
+	LoadBar(vtSymbol string, days int, interval Interval, callback BarCallback, useDatabase bool)
 	SendOrder(
-		strategy *Strategy, 
+		strategy *Strategy,
 		direction Direction,
-		offset Offset, 
+		offset Offset,
 		price, volume float64,
 		stop, lock bool,
-	)string
+	) string
 	CancelOrder(strategy *Strategy, vtOrderId string)
+	CancelLimitOrder(strategy *Strategy, vtOrderId string)
+	CancelStopOrder(strategy *Strategy, vtOrderId string)
 	CancelAll(strategy *Strategy)
 
 	SendStopOrder(
-		strategy *Strategy, contract *ContractData, 
+		strategy *Strategy, contract *ContractData,
 		direction Direction, offset Offset,
 		price, volume float64, lock bool,
-	)string
+	) string
 
 	SendLimitOrder(
-		strategy *Strategy, contract *ContractData, 
+		strategy *Strategy, contract *ContractData,
 		direction Direction, offset Offset,
 		price, volume float64, lock bool,
-	)string
+	) string
 }
 
-
 type Strategy struct {
-	Author   string
+	Author string
 
 	// vnpy中的 cta_engine
 	TradeEngine TradeEnginer
-	Name     string
-	VtSymbol string
+	Name        string
+	VtSymbol    string
 
 	Inited  bool
 	Trading bool
 	Pos     float64
 }
 
-func (s *Strategy) OnInit()      {}
-func (s *Strategy) OnStart()     {}
-func (s *Strategy) OnStop()      {}
-func (s *Strategy) OnTick()      {}
-func (s *Strategy) OnBar()       {}
-func (s *Strategy) OnTrade()     {}
-func (s *Strategy) OnOrder()     {}
-func (s *Strategy) OnStopOrder() {}
+func (s *Strategy) OnInit()                              {}
+func (s *Strategy) OnStart()                             {}
+func (s *Strategy) OnStop()                              {}
+func (s *Strategy) OnTick(*database.TickData)            {}
+func (s *Strategy) OnBar(*database.BarData)              {}
+func (s *Strategy) OnTrade(trade *TradeData)             {}
+func (s *Strategy) OnOrder(order *OrderData)             {}
+func (s *Strategy) OnStopOrder(stopOrder *StopOrderData) {}
 
-func (s *Strategy) Buy()   {}
-func (s *Strategy) Sell()  {}
-func (s *Strategy) Short() {}
-func (s *Strategy) Cover() {}
+func (s *Strategy) Buy(price, volume float64, stop, lock bool) string {
+	return s.SendOrder(LONG, OPEN, price, volume, stop, lock)
+}
+func (s *Strategy) Sell(price, volume float64, stop, lock bool) string {
+	return s.SendOrder(SHORT, CLOSE, price, volume, stop, lock)
+}
+func (s *Strategy) Short(price, volume float64, stop, lock bool) string {
+	return s.SendOrder(SHORT, OPEN, price, volume, stop, lock)
+}
+func (s *Strategy) Cover(price, volume float64, stop, lock bool) string {
+	return s.SendOrder(LONG, CLOSE, price, volume, stop, lock)
+}
 
 func (s *Strategy) SendOrder(
 	direction Direction, offset Offset,
 	price, volume float64,
-	stop, lock bool)string {
-	
-		if s.Trading{
-		vtOrderId := s.TradeEngine.SendOrder(s, direction, offset,price,volume,stop,lock)
+	stop, lock bool) string {
+
+	if s.Trading {
+		vtOrderId := s.TradeEngine.SendOrder(s, direction, offset, price, volume, stop, lock)
 		return vtOrderId
 	}
 
@@ -71,12 +85,12 @@ func (s *Strategy) SendOrder(
 }
 
 func (s *Strategy) CancelOrder(vtOrderId string) {
-	if s.Trading{
+	if s.Trading {
 		s.TradeEngine.CancelOrder(s, vtOrderId)
 	}
 }
-func (s *Strategy) CancelAll()   {
-	if s.Trading{
+func (s *Strategy) CancelAll() {
+	if s.Trading {
 		s.TradeEngine.CancelAll(s)
 	}
 }
@@ -86,8 +100,13 @@ func (s *Strategy) WriteLog() {}
 func (s *Strategy) GetEngineType() {}
 func (s *Strategy) GetPriceTick()  {}
 
-func (s *Strategy) LoadBar()  {}
-func (s *Strategy) LoadTick() {}
+func (s *Strategy) LoadBar(days int, interval Interval, callback BarCallback) {
+	if callback == nil {
+		callback = s.OnBar
+	}
+	s.TradeEngine.LoadBar(s.VtSymbol, days, interval, callback, false)
+}
+func (s *Strategy) LoadTick(days int, callback TickCallback) {}
 
 func (s *Strategy) PutEvent() {}
 
