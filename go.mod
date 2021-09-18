@@ -16,3 +16,5 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/text v0.3.7 // indirect
 )
+
+require github.com/markcheno/go-talib v0.0.0-20190307022042-cd53a9264d70 // indirect

@@ -79,7 +79,7 @@ func Temp() {
 func main() {
 	m := database.NewMongoDB("192.168.0.113", 27017)
 	fmt.Println(m)
-	r := m.Query(&database.QueryParam{Db: "vnpy", Collection: "SHFE_d_AUL8", Filter: bson.D{{}}})
+	r := m.Query(&database.QueryParam{Db: "vnpy", Collection: "SHFE_d_AUL8", Filter: bson.M{}})
 	fmt.Println(r)
 	fmt.Println("r length: ", len(r), r[0], r[0].Close, r[0].Datetime)
 }

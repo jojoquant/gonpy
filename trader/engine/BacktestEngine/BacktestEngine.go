@@ -17,22 +17,52 @@ import (
 )
 
 type Parameters struct {
-	Symbol     string
-	VtSymbol   string
-	Exchange   Exchange
-	Start      time.Time
-	End        time.Time
-	Rate       float64
-	Slippage   float64
-	Size       float64
-	PriceTick  float64
-	Capital    float64
-	RiskFree   float64
+	Symbol   string
+	Exchange Exchange
+	VtSymbol string
+
+	Start time.Time
+	End   time.Time
+
+	Rate      float64
+	Slippage  float64
+	Size      float64
+	PriceTick float64
+	Capital   float64
+	RiskFree  float64
+
 	AnnualDays int
 
 	Mode     BacktestMode
 	Interval Interval
 	Inverse  bool
+}
+
+func NewParameters(
+	symbol string,
+	exchange Exchange,
+	start, end time.Time,
+	rate, slippage, size, priceTick, capital, riskFree float64,
+	mode BacktestMode, interval Interval, inverse bool,
+) Parameters {
+	p := Parameters{
+		Symbol:     symbol,
+		Exchange:   exchange,
+		VtSymbol:   fmt.Sprintf("%s.%s", symbol, exchange),
+		Start:      start,
+		End:        end,
+		Rate:       rate,
+		Slippage:   slippage,
+		Size:       size,
+		PriceTick:  priceTick,
+		Capital:    capital,
+		RiskFree:   riskFree,
+		AnnualDays: 240,
+		Mode:       mode,
+		Interval:   interval,
+		Inverse:    inverse,
+	}
+	return p
 }
 
 type BacktestEngine struct {
@@ -41,17 +71,16 @@ type BacktestEngine struct {
 
 	Gateway string
 
-	Strategy *strategy.Strategy
+	Strategy strategy.Strategyer
 	Bar      *database.BarData
 	Tick     *database.TickData
 	Datetime time.Time
 
 	Database *database.MongoDB
-	
 
 	Days            int
-	BarCallback        strategy.BarCallback
-	TickCallback        strategy.TickCallback
+	BarCallback     strategy.BarCallback
+	TickCallback    strategy.TickCallback
 	HistoryBarData  []*database.BarData
 	HistoryTickData []*database.TickData
 
@@ -69,14 +98,27 @@ type BacktestEngine struct {
 	DailyResults map[string]*DailyResult
 }
 
-func NewBacktestEngine(param Parameters, database *database.MongoDB) *BacktestEngine {
+func NewBacktestEngine(param Parameters, database *database.MongoDB, strategy strategy.Strategyer) *BacktestEngine {
+	
 	b := &BacktestEngine{
-		Database: database,
+		Database:   database,
 		Parameters: param,
-		Gateway: "BacktestEngine",
+		Gateway:    "BacktestEngine",
+		Strategy:   strategy,
+		ActiveLimitOrders: make(map[string]*OrderData),
+		ActiveStopOrders: make(map[string]*StopOrderData),
+		LimitOrders: make(map[string]*OrderData),
+		StopOrders: make(map[string]*StopOrderData),
+		Trades:make(map[string]*TradeData),
+		DailyResults:make(map[string]*DailyResult),
 	}
 	// b.Parameters = param
 	// b.Gateway = "BacktestEngine"
+
+	// b.Strategy.VtSymbol = b.VtSymbol
+	b.Strategy.SetVtSymbol(b.VtSymbol)
+	strategy.SetTradeEngine(b)
+
 	return b
 }
 
@@ -99,75 +141,84 @@ func (b *BacktestEngine) LoadData() {
 	}
 
 	log.Println("加载数据: ", b.Start, " -> ", b.End)
-	util.FuncExecDuration(func() { time.Sleep(2 * time.Second) })
 
 	b.HistoryBarData = b.Database.Query(
 		&database.QueryParam{
 			Db:         "vnpy",
-			Collection: "SHFE_d_AUL8",
-			Filter:     bson.D{{}},
+			Collection: "db_bar_data",
+			Filter: bson.M{
+				"symbol": b.Symbol, "exchange": b.Exchange, "interval": b.Interval,
+				"datetime": bson.M{"$gte": b.Start, "$lte": b.End}},
 		},
 	)
 }
 
-func (b *BacktestEngine) LoadBar(vtSymbol string, days int, interval Interval, callback strategy.BarCallback, useDatabase bool){
+func (b *BacktestEngine) LoadBar(
+	vtSymbol string, days int,
+	interval Interval, callback strategy.BarCallback,
+	useDatabase bool) {
 	b.Days = days
 	b.BarCallback = callback
 }
 
-func (b *BacktestEngine) LoadTick(vtSymbol string, days int, callback strategy.TickCallback, useDatabase bool){
+func (b *BacktestEngine) LoadTick(
+	vtSymbol string, days int,
+	callback strategy.TickCallback,
+	useDatabase bool) {
 	b.Days = days
 	b.TickCallback = callback
 }
 
 func (b *BacktestEngine) AddStrategy() {}
 
-func (b *BacktestEngine) RunBacktest(){
-	
+func (b *BacktestEngine) RunBacktest() {
+
 	b.Strategy.OnInit()
-	
+
 	var index int
 	dayCount := 0
-	if b.Mode == BarMode{
-		for ix, data := range b.HistoryBarData{
-			if !b.Datetime.IsZero() && (data.Datetime.Day() != b.Datetime.Day()){
+	if b.Mode == BarMode {
+		for ix, data := range b.HistoryBarData {
+			if !b.Datetime.IsZero() && (data.Datetime.Day() != b.Datetime.Day()) {
 				dayCount++
-				if dayCount >= b.Days{
+				if dayCount >= b.Days {
 					break
 				}
 			}
-			
+
 			b.Datetime = data.Datetime
 			b.BarCallback(data)
 			index = ix
 		}
 
-		b.Strategy.Inited = true
+		// b.Strategy.Inited = true
+		b.Strategy.SetInited(true)
 		log.Println("策略初始化完成")
 
 		b.Strategy.OnStart()
-		b.Strategy.Trading = true
-		
+		// b.Strategy.Trading = true
+		b.Strategy.SetTrading(true)
+
 		log.Println("开始回放 Bar 历史数据")
-		if len(b.HistoryBarData[index:]) <= 1{
+		if len(b.HistoryBarData[index:]) <= 1 {
 			log.Println("历史数据不足, 回测终止")
 			return
 		}
 
-		for i, data := range b.HistoryBarData{
+		for i, data := range b.HistoryBarData {
 			b.NewBar(data)
 			log.Printf("当前回放进度: %d / %d \n", i, len(b.HistoryBarData[index:]))
 		}
 
-	}else if b.Mode == TickMode{
-		for _ , data := range b.HistoryTickData{
-			if !b.Datetime.IsZero() && (data.Datetime.Day() != b.Datetime.Day()){
+	} else if b.Mode == TickMode {
+		for _, data := range b.HistoryTickData {
+			if !b.Datetime.IsZero() && (data.Datetime.Day() != b.Datetime.Day()) {
 				dayCount++
-				if dayCount >= b.Days{
+				if dayCount >= b.Days {
 					break
 				}
 			}
-			
+
 			b.Datetime = data.Datetime
 			b.TickCallback(data)
 			// index = ix
@@ -180,8 +231,8 @@ func (b *BacktestEngine) NewBar(bar *database.BarData) {
 	b.Bar = bar
 	b.Datetime = bar.Datetime
 
-	b.CrossLimitOrder()
-	b.CrossStopOrder()
+	b.CrossLimitOrder(b.Strategy, "")
+	b.CrossStopOrder(b.Strategy, "")
 	b.Strategy.OnBar(bar)
 
 	b.UpdateDailyClose(bar.Close)
@@ -191,14 +242,14 @@ func (b *BacktestEngine) NewTick(tick *database.TickData) {
 	b.Tick = tick
 	b.Datetime = tick.Datetime
 
-	b.CrossLimitOrder()
-	b.CrossStopOrder()
+	b.CrossLimitOrder(b.Strategy, "")
+	b.CrossStopOrder(b.Strategy, "")
 	b.Strategy.OnTick(tick)
 
 	b.UpdateDailyClose(tick.LastPrice)
 }
 
-func (b *BacktestEngine) CrossLimitOrder() {
+func (b *BacktestEngine) CrossLimitOrder(strategy strategy.Strategyer, vtOrderId string) {
 	var longCrossPrice float64
 	var shortCrossPrice float64
 	var longBestPrice float64
@@ -260,7 +311,7 @@ func (b *BacktestEngine) CrossLimitOrder() {
 	}
 }
 
-func (b *BacktestEngine) CrossStopOrder() {
+func (b *BacktestEngine) CrossStopOrder(strategy strategy.Strategyer, vtOrderId string) {
 	var longCrossPrice float64
 	var shortCrossPrice float64
 	var longBestPrice float64
@@ -355,7 +406,7 @@ func (b *BacktestEngine) UpdateDailyClose(close float64) {
 }
 
 func (b *BacktestEngine) SendOrder(
-	strategy *strategy.Strategy,
+	strategy strategy.Strategyer,
 	direction Direction,
 	offset Offset,
 	price, volume float64,
@@ -366,24 +417,24 @@ func (b *BacktestEngine) SendOrder(
 	price = util.RoundTo(price, b.PriceTick)
 
 	if stop {
-		vtOrderId = b.SendStopOrder(strategy, contract, direction, offset, price, volume, false)
+		vtOrderId = b.SendStopOrder(strategy, contract, direction, offset, price, volume, lock, net)
 	} else {
-		vtOrderId = b.SendLimitOrder(strategy, contract, direction, offset, price, volume, false)
+		vtOrderId = b.SendLimitOrder(strategy, contract, direction, offset, price, volume,lock, net)
 	}
 
 	return vtOrderId
 }
 
 func (b *BacktestEngine) SendStopOrder(
-	strategy *strategy.Strategy, contract *ContractData,
+	strategy strategy.Strategyer, contract *ContractData,
 	direction Direction, offset Offset,
-	price, volume float64, lock bool,
+	price, volume float64, lock , net bool,
 ) string {
 
 	b.StopOrderCount++
 	stopOrder := NewStopOrderData(
 		b.Gateway, b.Symbol, Exchange(b.Parameters.Exchange),
-		direction, offset, price, volume, strategy.Name,
+		direction, offset, price, volume, strategy.GetStrategyName(),
 		fmt.Sprintf("%s.%d", STOP, b.StopOrderCount), b.Datetime)
 
 	b.ActiveStopOrders[stopOrder.StopOrderId] = stopOrder
@@ -393,9 +444,9 @@ func (b *BacktestEngine) SendStopOrder(
 }
 
 func (b *BacktestEngine) SendLimitOrder(
-	strategy *strategy.Strategy, contract *ContractData,
+	strategy strategy.Strategyer, contract *ContractData,
 	direction Direction, offset Offset,
-	price, volume float64, lock bool,
+	price, volume float64, lock, net bool,
 ) string {
 
 	b.LimitOrderCount++
@@ -409,7 +460,7 @@ func (b *BacktestEngine) SendLimitOrder(
 	return order.VtOrderId
 }
 
-func (b *BacktestEngine) CancelOrder(strategy *strategy.Strategy, vtOrderId string) {
+func (b *BacktestEngine) CancelOrder(strategy strategy.Strategyer, vtOrderId string) {
 	if strings.HasPrefix(vtOrderId, string(STOP)) {
 		b.CancelStopOrder(strategy, vtOrderId)
 	} else {
@@ -418,7 +469,7 @@ func (b *BacktestEngine) CancelOrder(strategy *strategy.Strategy, vtOrderId stri
 
 }
 
-func (b *BacktestEngine) CancelStopOrder(strategy *strategy.Strategy, vtOrderId string) {
+func (b *BacktestEngine) CancelStopOrder(strategy strategy.Strategyer, vtOrderId string) {
 	if order, ok := b.ActiveStopOrders[vtOrderId]; ok {
 		order.Status = CANCELLED
 		b.Strategy.OnStopOrder(order)
@@ -426,7 +477,7 @@ func (b *BacktestEngine) CancelStopOrder(strategy *strategy.Strategy, vtOrderId 
 	}
 }
 
-func (b *BacktestEngine) CancelLimitOrder(strategy *strategy.Strategy, vtOrderId string) {
+func (b *BacktestEngine) CancelLimitOrder(strategy strategy.Strategyer, vtOrderId string) {
 	if order, ok := b.ActiveLimitOrders[vtOrderId]; ok {
 		order.Status = CANCELLED
 		b.Strategy.OnOrder(order)
@@ -434,7 +485,7 @@ func (b *BacktestEngine) CancelLimitOrder(strategy *strategy.Strategy, vtOrderId
 	}
 }
 
-func (b *BacktestEngine) CancelAll(s *strategy.Strategy) {
+func (b *BacktestEngine) CancelAll(s strategy.Strategyer) {
 	for vtOrderId := range b.ActiveLimitOrders {
 		b.CancelLimitOrder(s, vtOrderId)
 	}
@@ -443,4 +494,3 @@ func (b *BacktestEngine) CancelAll(s *strategy.Strategy) {
 		b.CancelStopOrder(s, stopOrderId)
 	}
 }
-

@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"fmt"
 	. "gonpy/trader"
 	"gonpy/trader/database"
 	. "gonpy/trader/object"
@@ -10,30 +11,50 @@ type TickCallback func(*database.TickData)
 type BarCallback func(*database.BarData)
 
 type TradeEnginer interface {
-	LoadBar(vtSymbol string, days int, interval Interval, callback BarCallback, useDatabase bool)
+	LoadBar(
+		vtSymbol string, days int,
+		interval Interval,
+		callback BarCallback, useDatabase bool)
 	SendOrder(
-		strategy *Strategy,
+		strategy Strategyer,
 		direction Direction,
 		offset Offset,
 		price, volume float64,
-		stop, lock bool,
+		stop, lock, net bool,
 	) string
-	CancelOrder(strategy *Strategy, vtOrderId string)
-	CancelLimitOrder(strategy *Strategy, vtOrderId string)
-	CancelStopOrder(strategy *Strategy, vtOrderId string)
-	CancelAll(strategy *Strategy)
+	CancelOrder(strategy Strategyer, vtOrderId string)
+	CancelLimitOrder(strategy Strategyer, vtOrderId string)
+	CancelStopOrder(strategy Strategyer, vtOrderId string)
+	CancelAll(strategy Strategyer)
 
 	SendStopOrder(
-		strategy *Strategy, contract *ContractData,
+		strategy Strategyer, contract *ContractData,
 		direction Direction, offset Offset,
-		price, volume float64, lock bool,
+		price, volume float64, lock, net bool,
 	) string
 
 	SendLimitOrder(
-		strategy *Strategy, contract *ContractData,
+		strategy Strategyer, contract *ContractData,
 		direction Direction, offset Offset,
-		price, volume float64, lock bool,
+		price, volume float64, lock, net bool,
 	) string
+}
+
+type Strategyer interface {
+	SetVtSymbol(string)
+	SetInited(bool)
+	SetTrading(bool)
+	SetTradeEngine(TradeEnginer)
+	GetStrategyName() string
+
+	OnInit()
+	OnStart()
+	OnStop()
+	OnTick(*database.TickData)
+	OnBar(*database.BarData)
+	OnTrade(trade *TradeData)
+	OnOrder(order *OrderData)
+	OnStopOrder(stopOrder *StopOrderData)
 }
 
 type Strategy struct {
@@ -49,35 +70,56 @@ type Strategy struct {
 	Pos     float64
 }
 
-func (s *Strategy) OnInit()                              {}
-func (s *Strategy) OnStart()                             {}
-func (s *Strategy) OnStop()                              {}
-func (s *Strategy) OnTick(*database.TickData)            {}
-func (s *Strategy) OnBar(*database.BarData)              {}
+func (s *Strategy) SetVtSymbol(v string) {
+	s.VtSymbol = v
+}
+func (s *Strategy) SetInited(v bool) {
+	s.Inited = v
+}
+func (s *Strategy) SetTrading(v bool) {
+	s.Trading = v
+}
+func (s *Strategy) SetTradeEngine(t TradeEnginer) {
+	s.TradeEngine = t
+}
+
+func (s *Strategy) GetStrategyName() string {
+	return s.Name
+}
+
+func (s *Strategy) OnInit() {
+	s.LoadBar(20, MINUTE, s.OnBar, false)
+}
+func (s *Strategy) OnStart()                  {}
+func (s *Strategy) OnStop()                   {}
+func (s *Strategy) OnTick(*database.TickData) {}
+func (s *Strategy) OnBar(b *database.BarData) {
+	fmt.Println("Strategy OnBar:", b)
+}
 func (s *Strategy) OnTrade(trade *TradeData)             {}
 func (s *Strategy) OnOrder(order *OrderData)             {}
 func (s *Strategy) OnStopOrder(stopOrder *StopOrderData) {}
 
 func (s *Strategy) Buy(price, volume float64, stop, lock bool) string {
-	return s.SendOrder(LONG, OPEN, price, volume, stop, lock)
+	return s.SendOrder(LONG, OPEN, price, volume, stop, lock, false)
 }
 func (s *Strategy) Sell(price, volume float64, stop, lock bool) string {
-	return s.SendOrder(SHORT, CLOSE, price, volume, stop, lock)
+	return s.SendOrder(SHORT, CLOSE, price, volume, stop, lock, false)
 }
 func (s *Strategy) Short(price, volume float64, stop, lock bool) string {
-	return s.SendOrder(SHORT, OPEN, price, volume, stop, lock)
+	return s.SendOrder(SHORT, OPEN, price, volume, stop, lock, false)
 }
 func (s *Strategy) Cover(price, volume float64, stop, lock bool) string {
-	return s.SendOrder(LONG, CLOSE, price, volume, stop, lock)
+	return s.SendOrder(LONG, CLOSE, price, volume, stop, lock, false)
 }
 
 func (s *Strategy) SendOrder(
 	direction Direction, offset Offset,
 	price, volume float64,
-	stop, lock bool) string {
+	stop, lock, net bool) string {
 
 	if s.Trading {
-		vtOrderId := s.TradeEngine.SendOrder(s, direction, offset, price, volume, stop, lock)
+		vtOrderId := s.TradeEngine.SendOrder(s, direction, offset, price, volume, stop, lock, net)
 		return vtOrderId
 	}
 
@@ -89,7 +131,7 @@ func (s *Strategy) CancelOrder(vtOrderId string) {
 		s.TradeEngine.CancelOrder(s, vtOrderId)
 	}
 }
-func (s *Strategy) CancelAll() {
+func (s *Strategy) CancelAll(strategy Strategyer) {
 	if s.Trading {
 		s.TradeEngine.CancelAll(s)
 	}
@@ -100,12 +142,10 @@ func (s *Strategy) WriteLog() {}
 func (s *Strategy) GetEngineType() {}
 func (s *Strategy) GetPriceTick()  {}
 
-func (s *Strategy) LoadBar(days int, interval Interval, callback BarCallback) {
-	if callback == nil {
-		callback = s.OnBar
-	}
-	s.TradeEngine.LoadBar(s.VtSymbol, days, interval, callback, false)
+func (s *Strategy) LoadBar(days int, interval Interval, callback BarCallback, useDatabase bool) {
+	s.TradeEngine.LoadBar(s.VtSymbol, days, interval, callback, useDatabase)
 }
+
 func (s *Strategy) LoadTick(days int, callback TickCallback) {}
 
 func (s *Strategy) PutEvent() {}

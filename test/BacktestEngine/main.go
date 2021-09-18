@@ -2,26 +2,45 @@ package main
 
 import (
 	"fmt"
+	"gonpy/trader"
+	"gonpy/trader/database"
 	"gonpy/trader/engine/BacktestEngine"
+	"gonpy/trader/strategy"
+	"gonpy/trader/util"
+	"math"
 	"time"
 )
 
 func main() {
+	// xx :=fmt.Sprintf("%s.%d", trader.STOP, 123)
+	// fmt.Println(xx)
 
-	r := BacktestEngine.NewDailyResult("dsad", 12.3)
-	fmt.Println(r)
+	// r := BacktestEngine.NewDailyResult("dsad", 12.3)
+	// fmt.Println(r)
 
-	start, _ := time.Parse("2006-01-02 15:04:05", "2019-10-13 12:00:33")
-	end, _ := time.Parse("2006-01-02", "2020-10-13")
-	y, m, d := time.Now().Date()
+	start, _ := time.Parse("2006-01-02 15:04:05", "2013-08-25 12:00:33")
+	end, _ := time.Parse("2006-01-02 15:04:05", "2021-02-25 15:00:00")
 	
-	fmt.Println(y, m, d, time.Now().Format("2006-01-02"))
+	// , m, d := time.Now().Date()
+	// fmt.Println(y, m, d, time.Now().Format("2006-01-02"))
 
-	p := BacktestEngine.Parameters{
-		Start: start,
-		End:   end,
-	}
+	p := BacktestEngine.NewParameters(
+		"FUL8", "SHFE", start, end, 0.3/10000, 1, 10, 1, 
+		math.Pow(10, 6), 0, 
+		trader.BarMode, trader.DAILY, false)
 
-	b := BacktestEngine.NewBacktestEngine(p)
+	db := database.NewMongoDB("192.168.0.113", 27017)
+	
+	// s := &strategy.Strategy{}
+	s := strategy.NewDualMA()
+	b := BacktestEngine.NewBacktestEngine(p, db, s)
+
+	util.FuncExecDuration(b.LoadData)
 	b.LoadData()
+	
+	// b.AddStrategy()
+	
+	util.FuncExecDuration(b.RunBacktest)
+	// b.RunBacktest()
+	fmt.Println(111)
 }

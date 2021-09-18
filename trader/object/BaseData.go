@@ -6,8 +6,8 @@ import (
 
 type BaseData struct {
 	Gateway  string
-	Symbol   string
-	Exchange Exchange
+	Symbol   string `bson:"symbol"`
+	Exchange Exchange `bson:"exchange"`
 	VtSymbol string // "symbol.exchange"
 }
 

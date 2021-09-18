@@ -18,7 +18,7 @@ type MongoDB struct {
 type QueryParam struct {
 	Db         string
 	Collection string
-	Filter     bson.D
+	Filter     bson.M
 }
 
 func NewMongoDB(host string, port int) *MongoDB {
