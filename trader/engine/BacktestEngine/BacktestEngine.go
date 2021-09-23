@@ -1,6 +1,7 @@
 package BacktestEngine
 
 import (
+	"encoding/json"
 	"fmt"
 	. "gonpy/trader"
 	"gonpy/trader/database"
@@ -10,9 +11,13 @@ import (
 	"gonpy/trader/util"
 	"log"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-gota/gota/dataframe"
+	"github.com/go-gota/gota/series"
+	"github.com/montanaflynn/stats"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -95,22 +100,25 @@ type BacktestEngine struct {
 	TradeCount int
 	Trades     map[string]*TradeData
 
-	DailyResults map[string]*DailyResult
+	DailyResults     map[string]*DailyResult
+	DailyResultsKeys []string
+	Dailydf          dataframe.DataFrame
 }
 
 func NewBacktestEngine(param Parameters, database *database.MongoDB, strategy strategy.Strategyer) *BacktestEngine {
-	
+
 	b := &BacktestEngine{
-		Database:   database,
-		Parameters: param,
-		Gateway:    "BacktestEngine",
-		Strategy:   strategy,
+		Database:          database,
+		Parameters:        param,
+		Gateway:           "BacktestEngine",
+		Strategy:          strategy,
 		ActiveLimitOrders: make(map[string]*OrderData),
-		ActiveStopOrders: make(map[string]*StopOrderData),
-		LimitOrders: make(map[string]*OrderData),
-		StopOrders: make(map[string]*StopOrderData),
-		Trades:make(map[string]*TradeData),
-		DailyResults:make(map[string]*DailyResult),
+		ActiveStopOrders:  make(map[string]*StopOrderData),
+		LimitOrders:       make(map[string]*OrderData),
+		StopOrders:        make(map[string]*StopOrderData),
+		Trades:            make(map[string]*TradeData),
+		DailyResults:      make(map[string]*DailyResult),
+		DailyResultsKeys:  make([]string, 0, 50),
 	}
 	// b.Parameters = param
 	// b.Gateway = "BacktestEngine"
@@ -402,6 +410,7 @@ func (b *BacktestEngine) UpdateDailyClose(close float64) {
 		dailyResult.ClosePrice = close
 	} else {
 		b.DailyResults[date] = NewDailyResult(date, close)
+		b.DailyResultsKeys = append(b.DailyResultsKeys, date)
 	}
 }
 
@@ -419,7 +428,7 @@ func (b *BacktestEngine) SendOrder(
 	if stop {
 		vtOrderId = b.SendStopOrder(strategy, contract, direction, offset, price, volume, lock, net)
 	} else {
-		vtOrderId = b.SendLimitOrder(strategy, contract, direction, offset, price, volume,lock, net)
+		vtOrderId = b.SendLimitOrder(strategy, contract, direction, offset, price, volume, lock, net)
 	}
 
 	return vtOrderId
@@ -428,7 +437,7 @@ func (b *BacktestEngine) SendOrder(
 func (b *BacktestEngine) SendStopOrder(
 	strategy strategy.Strategyer, contract *ContractData,
 	direction Direction, offset Offset,
-	price, volume float64, lock , net bool,
+	price, volume float64, lock, net bool,
 ) string {
 
 	b.StopOrderCount++
@@ -493,4 +502,195 @@ func (b *BacktestEngine) CancelAll(s strategy.Strategyer) {
 	for stopOrderId := range b.ActiveStopOrders {
 		b.CancelStopOrder(s, stopOrderId)
 	}
+}
+
+func (b *BacktestEngine) CalculateResult() map[string]interface{} {
+	log.Println("开始计算逐日盯市盈亏")
+
+	if len(b.Trades) == 0 {
+		log.Panicln("成交记录为空, 无法计算")
+		return nil
+	}
+
+	for _, trade := range b.Trades {
+		date := trade.Datetime.Format("2006-01-02")
+		dailyResult := b.DailyResults[date]
+		dailyResult.AddTrade(trade)
+	}
+
+	var preClose float64 = 0
+	var startPos float64 = 0
+	dr := []DailyResult{}
+	for _, key := range b.DailyResultsKeys {
+		b.DailyResults[key].CalculatePnl(preClose, startPos, b.Size, b.Rate, b.Slippage, b.Inverse)
+		preClose = b.DailyResults[key].ClosePrice
+		startPos = b.DailyResults[key].EndPos
+
+		dr = append(dr, *b.DailyResults[key])
+	}
+
+	log.Println("逐日盯市盈亏计算完成")
+
+	drJson, err := json.Marshal(dr)
+	if err != nil {
+		log.Println(err)
+	}
+
+	b.Dailydf = dataframe.ReadJSON(strings.NewReader(string(drJson)))
+	DailydfLength := b.Dailydf.Nrow()
+	balance, _ := stats.CumulativeSum(b.Dailydf.Col("NetPnl").Float())
+
+	// 计算 return
+	returnS := make([]float64, DailydfLength)
+	highlevel := make([]float64, DailydfLength)
+	drawdown := make([]float64, DailydfLength)
+	ddpercent := make([]float64, DailydfLength)
+
+	balance[0] = balance[0] + b.Capital
+	highlevel[0] = balance[0]
+	drawdown[0] = balance[0] - highlevel[0]
+	ddpercent[0] = drawdown[0] / highlevel[0] * 100.0
+
+	for i := 1; i < len(balance); i++ {
+		balance[i] = balance[i] + b.Capital
+		if i == 1 {
+			returnS[i-1] = math.Log(balance[i] / b.Capital)
+		} else {
+			returnS[i-1] = math.Log(balance[i] / balance[i-1])
+		}
+
+		if math.IsNaN(returnS[i-1]) || math.IsInf(returnS[i-1], 0) {
+			returnS[i-1] = 0.0
+		}
+
+		highlevel[i], err = stats.Max(balance[0 : i+1])
+		if err != nil {
+			log.Println(err)
+		}
+		drawdown[i] = balance[i] - highlevel[i]
+		ddpercent[i] = drawdown[i] / highlevel[i] * 100.0
+	}
+
+	b.Dailydf = b.Dailydf.Mutate(series.New(balance, series.Float, "Balance"))
+	b.Dailydf = b.Dailydf.Mutate(series.New(returnS, series.Float, "Return"))
+
+	startDate := b.Dailydf.Select("Date").Records()[1][0]
+	endDate := b.Dailydf.Select("Date").Records()[DailydfLength][0]
+
+	totalDays := DailydfLength
+	profitDays := b.Dailydf.Filter(
+		dataframe.F{Colname: "NetPnl", Comparator: series.Greater, Comparando: 0.0},
+	).Nrow()
+	lossDays := b.Dailydf.Filter(
+		dataframe.F{Colname: "NetPnl", Comparator: series.Less, Comparando: 0.0},
+	).Nrow()
+
+	endBalance := balance[len(balance)-1]
+	maxDrawdown, _ := stats.Min(drawdown)
+	maxDDpercent, _ := stats.Min(ddpercent)
+
+	maxDrawdownEndIndex := util.SliceIndex(len(drawdown), func(i int) bool { return drawdown[i] == maxDrawdown })
+	maxDrawdownStart, _ := stats.Max(balance[0:maxDrawdownEndIndex])
+	maxDrawdownStartIndex := util.SliceIndex(len(drawdown), func(i int) bool { return balance[0:maxDrawdownEndIndex][i] == maxDrawdownStart })
+	maxDrawdownDuration := maxDrawdownEndIndex - maxDrawdownStartIndex
+
+	totalNetPnl, _ := stats.Sum(b.Dailydf.Col("NetPnl").Float())
+	dailyNetPnl := totalNetPnl / float64(totalDays)
+
+	totalCommission, _ := stats.Sum(b.Dailydf.Col("Commission").Float())
+	dailyCommission := totalCommission / float64(totalDays)
+
+	totalSlippage, _ := stats.Sum(b.Dailydf.Col("Slippage").Float())
+	dailySlippage := totalSlippage / float64(totalDays)
+
+	totalTurnover, _ := stats.Sum(b.Dailydf.Col("Turnover").Float())
+	dailyTurnover := totalTurnover / float64(totalDays)
+
+	totalTradeCount, _ := stats.Sum(b.Dailydf.Col("TradeCount").Float())
+	dailyTradeCount := totalTradeCount / float64(totalDays)
+
+	totalReturn := (endBalance/b.Capital - 1) * 100
+	annualReturn := totalReturn / float64(totalDays) * float64(b.AnnualDays)
+
+	returnMean, _ := stats.Mean(returnS)
+	dailyReturn := returnMean * 100
+	returnStd, _ := stats.StandardDeviation(returnS)
+	returnStd = returnStd * 100
+
+	var dailyRiskFree float64
+	var sharpRatio float64
+	if returnStd != 0 {
+		sqrtAnnualDays := math.Sqrt(float64(b.AnnualDays))
+		dailyRiskFree = b.RiskFree / sqrtAnnualDays
+		sharpRatio = (dailyReturn - dailyRiskFree) / returnStd * sqrtAnnualDays
+	} else {
+		sharpRatio = 0
+	}
+
+	returnDarwdownRatio := -totalReturn / maxDDpercent
+
+	log.Println("----------------------------------------------")
+	log.Println("首个交易日:", startDate)
+	log.Println("最后交易日:", endDate)
+	log.Println("总交易日:", totalDays)
+	log.Println("盈利交易日:", profitDays)
+	log.Println("亏损交易日:", lossDays)
+
+	log.Println("起始资金:", strconv.FormatFloat(b.Capital, 'f', 2, 64))
+	log.Println("结束资金:", strconv.FormatFloat(endBalance, 'f', 2, 64))
+
+	log.Println("总收益率:", strconv.FormatFloat(totalReturn, 'f', 2, 64), "%")
+	log.Println("年化收益率:", strconv.FormatFloat(annualReturn, 'f', 2, 64), "%")
+	log.Println("最大回撤:", strconv.FormatFloat(maxDrawdown, 'f', 2, 64))
+	log.Println("百分比最大回撤:", strconv.FormatFloat(maxDDpercent, 'f', 2, 64), "%")
+	log.Println("最长回撤天数:", maxDrawdownDuration)
+
+	log.Println("总盈亏:", strconv.FormatFloat(totalNetPnl, 'f', 2, 64))
+	log.Println("总手续费:", strconv.FormatFloat(totalCommission, 'f', 2, 64))
+	log.Println("总滑点:", strconv.FormatFloat(totalSlippage, 'f', 2, 64))
+	log.Println("总成交金额:", strconv.FormatFloat(totalTurnover, 'f', 2, 64))
+	log.Println("总成交笔数:", totalTradeCount)
+	log.Println("-----------------------")
+	log.Println("日均盈亏:", strconv.FormatFloat(dailyNetPnl, 'f', 2, 64))
+	log.Println("日均手续费:", strconv.FormatFloat(dailyCommission, 'f', 2, 64))
+	log.Println("日均滑点:", strconv.FormatFloat(dailySlippage, 'f', 2, 64))
+	log.Println("日均成交金额:", strconv.FormatFloat(dailyTurnover, 'f', 2, 64))
+	log.Println("日均成交笔数:", strconv.FormatFloat(dailyTradeCount, 'f', 2, 64))
+	log.Println("日均收益率:", strconv.FormatFloat(dailyReturn, 'f', 2, 64), "%")
+	log.Println("收益标准差:", strconv.FormatFloat(returnStd, 'f', 2, 64), "%")
+	log.Println("Sharp Ratio:", strconv.FormatFloat(sharpRatio, 'f', 2, 64))
+	log.Println("收益回撤比:", strconv.FormatFloat(returnDarwdownRatio, 'f', 2, 64))
+	
+	log.Println("----------------------------------------------")
+	log.Println("策略统计指标计算完成")
+	
+	statistics := map[string]interface{}{
+		"startDate":startDate,
+		"endDate":endDate,
+		"totalDays":totalDays,
+		"profitDays":profitDays,
+		"lossDays":lossDays,
+		"capital":b.Capital,
+		"endBalance":endBalance,
+		"maxDrawdown":maxDrawdown,
+		"maxDDpercent":maxDDpercent,
+		"maxDrawdownDuration":maxDrawdownDuration,
+		"totalNetPnl":totalNetPnl,
+		"dailyNetPnl":dailyNetPnl,
+		"totalCommission":totalCommission,
+		"dailyCommission":dailyCommission,
+		"totalSlippage":totalSlippage,
+		"dailySlippage":dailySlippage,
+		"totalTurnover":totalTurnover,
+		"dailyTurnover":dailyTurnover,
+		"totalTradeCount":totalTradeCount,
+		"dailyTradeCount":dailyTradeCount,
+		"totalReturn":totalReturn,
+		"annualReturn":annualReturn,
+		"dailyReturn":dailyReturn,
+		"returnStd":returnStd,
+		"sharpRatio":sharpRatio,
+		"returnDarwdownRatio":returnDarwdownRatio,
+	}
+	return statistics 
 }

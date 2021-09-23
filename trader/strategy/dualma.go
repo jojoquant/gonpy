@@ -26,7 +26,7 @@ type DualMA struct {
 }
 
 func NewDualMA() *DualMA {
-	arrayLenMax := 1000
+	arrayLenMax := 380000
 	d := &DualMA{
 		lenCount:    0,
 		fastWindow: 10,

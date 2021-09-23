@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"gonpy/trader"
 	"gonpy/trader/database"
 	"gonpy/trader/engine/BacktestEngine"
 	"gonpy/trader/strategy"
 	"gonpy/trader/util"
+	"log"
 	"math"
 	"time"
 )
@@ -42,5 +42,6 @@ func main() {
 	
 	util.FuncExecDuration(b.RunBacktest)
 	// b.RunBacktest()
-	fmt.Println(111)
+	sMap := b.CalculateResult()
+	log.Println(sMap)
 }

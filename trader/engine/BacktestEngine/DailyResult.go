@@ -6,11 +6,11 @@ import (
 )
 
 type DailyResult struct {
-	Date       string
+	Date       string 
 	ClosePrice float64
 	PreClose   float64
 
-	Trades     []*TradeData
+	Trades     []*TradeData // `json:"Trades, omitempty"`
 	TradeCount int
 
 	StartPos float64
