@@ -82,6 +82,7 @@ type BacktestEngine struct {
 	Datetime time.Time
 
 	Database *database.MongoDB
+	DisplayDB *database.InfluxDB
 
 	Days            int
 	BarCallback     strategy.BarCallback
@@ -103,6 +104,8 @@ type BacktestEngine struct {
 	DailyResults     map[string]*DailyResult
 	DailyResultsKeys []string
 	Dailydf          dataframe.DataFrame
+
+	HasCalculated bool  // 用于标记回测结果是否统计过
 }
 
 func NewBacktestEngine(param Parameters, database *database.MongoDB, strategy strategy.Strategyer) *BacktestEngine {
@@ -159,6 +162,8 @@ func (b *BacktestEngine) LoadData() {
 				"datetime": bson.M{"$gte": b.Start, "$lte": b.End}},
 		},
 	)
+
+	b.Database.Close()
 }
 
 func (b *BacktestEngine) LoadBar(
@@ -180,7 +185,8 @@ func (b *BacktestEngine) LoadTick(
 func (b *BacktestEngine) AddStrategy() {}
 
 func (b *BacktestEngine) RunBacktest() {
-
+	
+	b.HasCalculated = false
 	b.Strategy.OnInit()
 
 	var index int
@@ -539,6 +545,8 @@ func (b *BacktestEngine) CalculateResult() map[string]interface{} {
 	b.Dailydf = dataframe.ReadJSON(strings.NewReader(string(drJson)))
 	DailydfLength := b.Dailydf.Nrow()
 	balance, _ := stats.CumulativeSum(b.Dailydf.Col("NetPnl").Float())
+	
+	b.HasCalculated = true
 
 	// 计算 return
 	returnS := make([]float64, DailydfLength)
@@ -573,6 +581,8 @@ func (b *BacktestEngine) CalculateResult() map[string]interface{} {
 
 	b.Dailydf = b.Dailydf.Mutate(series.New(balance, series.Float, "Balance"))
 	b.Dailydf = b.Dailydf.Mutate(series.New(returnS, series.Float, "Return"))
+
+	//TODO save HistoryBardata and dailydf into influxdb to display on grafana
 
 	startDate := b.Dailydf.Select("Date").Records()[1][0]
 	endDate := b.Dailydf.Select("Date").Records()[DailydfLength][0]
@@ -693,4 +703,13 @@ func (b *BacktestEngine) CalculateResult() map[string]interface{} {
 		"returnDarwdownRatio":returnDarwdownRatio,
 	}
 	return statistics 
+}
+
+func(b *BacktestEngine) SaveBacktestResultToInfluxDB(){
+	if !b.HasCalculated{
+		log.Println("未完成统计，禁止保存数据到 InfluxDB")
+		return
+	}
+
+
 }

@@ -43,7 +43,7 @@ func NewMongoDB(host string, port int) *MongoDB {
 		log.Fatal(err)
 	}
 
-	log.Println("Connected to MongoDB!")
+	log.Println("Successfully connected to MongoDB!")
 
 	m.client = client
 	return m
@@ -69,4 +69,11 @@ func (m *MongoDB) Query(q *QueryParam) []*BarData {
 	// 完成后关闭游标
 	cur.Close(context.TODO())
 	return r
+}
+
+func(m *MongoDB)Close(){
+	if err:=m.client.Disconnect(context.TODO()); err!=nil{
+		log.Fatal(err)
+	}
+	log.Println("Connection to MongoDB closed.")
 }
