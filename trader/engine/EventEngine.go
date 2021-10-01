@@ -54,14 +54,20 @@ func (e *EventEngine) Process(event *trader.Event) {
 	if handlers, handlersExist := e.Handlers[event.Type]; handlersExist {
 		for _, handler := range handlers {
 			wg.Add(1)
-			go handler(event)
+			go func(handler HandlerFunc){
+				handler(event)
+				wg.Done()
+			}(handler)
 		}
 	}
 
 	if len(e.GeneralHandlers) != 0 {
 		for _, generalHandler := range e.GeneralHandlers {
 			wg.Add(1)
-			go generalHandler(event)
+			go func(generalHandler HandlerFunc){
+				generalHandler(event)
+				wg.Done()
+			}(generalHandler)
 		}
 	}
 

@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-func FuncExecDuration(f func()) time.Duration{
+func FuncExecDuration(funcName string, f func()) time.Duration{
 	start := time.Now()
 	f()
 	t := time.Since(start)
-	log.Println("Function exec time cost :", t)
+	log.Printf("Function [%s] exec time cost : %s", funcName, t)
 	return t
 }

@@ -13,6 +13,7 @@ import (
 type MongoDB struct {
 	URI    string
 	client *mongo.Client
+	ctx    context.Context
 }
 
 type QueryParam struct {
@@ -21,23 +22,31 @@ type QueryParam struct {
 	Filter     bson.M
 }
 
+type InsertParam struct {
+	Db         string
+	Collection string
+	Ordered    bool
+	Doc        []interface{}
+}
+
 func NewMongoDB(host string, port int) *MongoDB {
 	m := &MongoDB{
 		URI: fmt.Sprintf("mongodb://%s:%d", host, port),
+		ctx: context.TODO(),
 	}
 	// Set client options
 	// "mongodb://192.168.0.113:27017"
 	clientOptions := options.Client().ApplyURI(m.URI)
 
 	// Connect to MongoDB
-	client, err := mongo.Connect(context.TODO(), clientOptions)
+	client, err := mongo.Connect(m.ctx, clientOptions)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Check the connection
-	err = client.Ping(context.TODO(), nil)
+	err = client.Ping(m.ctx, nil)
 
 	if err != nil {
 		log.Fatal(err)
@@ -51,28 +60,43 @@ func NewMongoDB(host string, port int) *MongoDB {
 
 func (m *MongoDB) Query(q *QueryParam) []*BarData {
 	collection := m.client.Database(q.Db).Collection(q.Collection)
-	cur, err := collection.Find(context.TODO(), q.Filter)
+	cur, err := collection.Find(m.ctx, q.Filter)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	var r []*BarData
-	for cur.Next(context.TODO()) {
-		var elem BarData
-		err := cur.Decode(&elem)
-		if err != nil {
-			log.Fatal(err)
-		}
-		r = append(r, &elem)
+
+	// 经过简单对比测试, 单独cur 和 cur.All 差距不大, 后续需要继续对比测试
+	// for cur.Next(m.ctx) {
+	// 	var elem BarData
+	// 	err := cur.Decode(&elem)
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// 	r = append(r, &elem)
+	// }
+
+	if err = cur.All(m.ctx, &r); err != nil {
+		log.Fatal(err)
 	}
 
 	// 完成后关闭游标
-	cur.Close(context.TODO())
+	cur.Close(m.ctx)
 	return r
 }
 
-func(m *MongoDB)Close(){
-	if err:=m.client.Disconnect(context.TODO()); err!=nil{
+func (m *MongoDB) InsertMany(i *InsertParam) {
+	collection := m.client.Database(i.Db).Collection(i.Collection)
+	opts := options.InsertMany().SetOrdered(i.Ordered)
+	_, err := collection.InsertMany(m.ctx, i.Doc, opts)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (m *MongoDB) Close() {
+	if err := m.client.Disconnect(m.ctx); err != nil {
 		log.Fatal(err)
 	}
 	log.Println("Connection to MongoDB closed.")

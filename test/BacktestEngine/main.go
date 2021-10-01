@@ -25,9 +25,9 @@ func main() {
 	// fmt.Println(y, m, d, time.Now().Format("2006-01-02"))
 
 	p := BacktestEngine.NewParameters(
-		"FUL8", "SHFE", start, end, 0.3/10000, 1, 10, 1, 
+		"LL8", "DCE", start, end, 0.3/10000, 1, 10, 1, 
 		math.Pow(10, 6), 0, 
-		trader.BarMode, trader.DAILY, false)
+		trader.BarMode, trader.MINUTE, false)
 
 	db := database.NewMongoDB("192.168.0.113", 27017)
 	
@@ -35,12 +35,12 @@ func main() {
 	s := strategy.NewDualMA()
 	b := BacktestEngine.NewBacktestEngine(p, db, s)
 
-	util.FuncExecDuration(b.LoadData)
-	b.LoadData()
+	util.FuncExecDuration("LoadData", b.LoadData)
+	// b.LoadData()
 	
 	// b.AddStrategy()
 	
-	util.FuncExecDuration(b.RunBacktest)
+	util.FuncExecDuration("RunBacktest", b.RunBacktest)
 	// b.RunBacktest()
 	sMap := b.CalculateResult()
 	log.Println(sMap)
