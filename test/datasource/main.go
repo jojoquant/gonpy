@@ -94,9 +94,9 @@ func main() {
 				interval.Reset(200 * time.Millisecond)
 				continue
 			}
-			insertParam.Doc = make([]interface{}, 0)
+			insertParam.Docs = make([]interface{}, 0)
 			for _, k := range klines {
-				insertParam.Doc = append(insertParam.Doc, bson.M{
+				insertParam.Docs = append(insertParam.Docs, bson.M{
 					"datetime":time.Unix(k.Timestamp,0),
 					"symbol":k.Pair.String(),
 					"open_price":k.Open,

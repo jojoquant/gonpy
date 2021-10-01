@@ -26,7 +26,8 @@ type InsertParam struct {
 	Db         string
 	Collection string
 	Ordered    bool
-	Doc        []interface{}
+	Docs       []interface{} // for InsertMany
+	Doc        bson.M        // for InsertOne
 }
 
 func NewMongoDB(host string, port int) *MongoDB {
@@ -89,7 +90,17 @@ func (m *MongoDB) Query(q *QueryParam) []*BarData {
 func (m *MongoDB) InsertMany(i *InsertParam) {
 	collection := m.client.Database(i.Db).Collection(i.Collection)
 	opts := options.InsertMany().SetOrdered(i.Ordered)
-	_, err := collection.InsertMany(m.ctx, i.Doc, opts)
+
+	_, err := collection.InsertMany(m.ctx, i.Docs, opts)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (m *MongoDB) InsertOne(i *InsertParam) {
+	collection := m.client.Database(i.Db).Collection(i.Collection)
+
+	_, err := collection.InsertOne(m.ctx, i.Doc)
 	if err != nil {
 		log.Fatal(err)
 	}
