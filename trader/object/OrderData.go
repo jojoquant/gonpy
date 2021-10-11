@@ -28,6 +28,7 @@ type OrderData struct {
 // OrderType 默认为 LIMIT 
 // Traded 默认为 0.0
 // Reference 默认为 ""
+// status 如无特殊情况, 传入SUBMITTING
 func NewOrderData(
 	gateway, symbol string, exchange Exchange,
 	orderId string, direction Direction, offset Offset,

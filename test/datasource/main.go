@@ -4,6 +4,7 @@ import (
 	"context"
 	"gonpy/trader"
 	"gonpy/trader/database"
+	"gonpy/trader/util"
 	"log"
 	"net/http"
 	"net/url"
@@ -34,11 +35,11 @@ func MapGoExKlinePeriodToVnpyInterval(kp goex.KlinePeriod)trader.Interval{
 	return i
 }
 
-func main() {
-	beginTime := time.Date(2017, 12, 18, 0, 0, 0, 0, time.Local) //开始时间2017年12月18日,需自行修改
+func temp() {
+	beginTime := time.Date(2021, 9, 19, 0, 0, 0, 0, time.Local) //开始时间2017年12月18日,需自行修改
 	var klinePeriod goex.KlinePeriod = goex.KLINE_PERIOD_1MIN    //see: github.com/nntaoli-project/goex/Const.go
 	dbInterval := MapGoExKlinePeriodToVnpyInterval(klinePeriod)
-	currencyPair := goex.LTC_USDT
+	currencyPair := goex.ETH_BTC
 	proxyUrl := "http://127.0.0.1:7890"  // 国内目前不挂代理无法请求数据
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -105,6 +106,9 @@ func main() {
 					"close_price":k.Close,
 					"volume":k.Vol,
 					"interval": dbInterval,
+					"exchange":trader.BINANCE,
+					"open_interest":0,
+					"turnover":0,
 				})
 			}
 			db.InsertMany(insertParam)
@@ -121,4 +125,8 @@ func main() {
 
 		log.Println("当前数据量为: ",dataNum, "条.", "最后数据日期:", time.Unix(int64(startTime/1000),0))
 	}
+}
+
+func main(){
+	util.FuncExecDuration("main", temp)
 }
