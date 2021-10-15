@@ -3,14 +3,14 @@ package object
 import (
 	"fmt"
 	"time"
-	. "gonpy/trader"
+	"gonpy/trader"
 )
 
 
 type ContractData struct {
 	BaseData
 	Name      string
-	Product   Product
+	Product   trader.Product
 	Size      float64
 	PriceTick float64
 
@@ -21,14 +21,14 @@ type ContractData struct {
 
 	OptionStrike     float64
 	OptionUnderlying string
-	OptionType       OptionType
+	OptionType       trader.OptionType
 	OptionExpiry     time.Time
 	OptionPortfolio  string
 	OptionIndex      string
 }
 
 func NewContractData(gateway, symbol string,
-	exchange Exchange, direction Direction, offset Offset,
+	exchange trader.Exchange, direction trader.Direction, offset trader.Offset,
 	price, volume float64,
 ) *ContractData {
 

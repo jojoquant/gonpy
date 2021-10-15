@@ -2,32 +2,32 @@ package object
 
 import (
 	"fmt"
-	. "gonpy/trader"
+	"gonpy/trader"
 	"time"
 )
 
 type OrderRequest struct {
 	BaseData
-	Direction Direction
-	Type      OrderType
+	Direction trader.Direction
+	Type      trader.OrderType
 	Volume    float64
 	Price     float64
-	Offset    Offset
+	Offset    trader.Offset
 	Reference string
 }
 
 func NewOrderRequest(
-	gateway, symbol string, exchange Exchange,
-	direction Direction, offset Offset,
-	orderType OrderType,
+	gateway, symbol string, exchange trader.Exchange,
+	direction trader.Direction, offset trader.Offset,
+	orderType trader.OrderType,
 	price, volume float64, reference string) *OrderRequest {
 
 	o := &OrderRequest{
 		Direction: direction,
-		Type: orderType,
-		Volume: volume,
-		Price: price,
-		Offset: offset,
+		Type:      orderType,
+		Volume:    volume,
+		Price:     price,
+		Offset:    offset,
 		Reference: reference,
 	}
 	o.Gateway = gateway
@@ -38,7 +38,10 @@ func NewOrderRequest(
 	return o
 }
 
-func (o *OrderRequest)CreateOrderData(orderId string, gateway string)*OrderData{
-	od := NewOrderData(gateway, o.Symbol,o.Exchange, orderId,o.Direction,o.Offset,o.Price,o.Volume,SUBMITTING,time.Now())
+func (o *OrderRequest) CreateOrderData(orderId string, gateway string) *OrderData {
+	od := NewOrderData(
+		gateway, o.Symbol, o.Exchange,
+		orderId, o.Direction, o.Offset, o.Price, o.Volume,
+		trader.SUBMITTING, time.Now())
 	return od
 }

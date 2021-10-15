@@ -29,7 +29,7 @@ type PositionHolding struct {
 	ShortTdFrozen  float64
 }
 
-func NewPositionHolding(contract object.ContractData)*PositionHolding{
+func NewPositionHolding(contract *object.ContractData)*PositionHolding{
 	p := &PositionHolding{
 		VtSymbol: contract.VtSymbol,
 		Exchange: contract.Exchange,

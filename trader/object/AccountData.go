@@ -2,7 +2,7 @@ package object
 
 import (
 	"fmt"
-	. "gonpy/trader"
+	"gonpy/trader"
 )
 
 type AccountData struct{
@@ -17,7 +17,7 @@ type AccountData struct{
 }
 
 func NewAccountData(
-	gateway, symbol string, exchange Exchange,
+	gateway, symbol string, exchange trader.Exchange,
 	accountId string, balance, frozen float64)*AccountData{
 	a := &AccountData{
 		AccountId: accountId,
