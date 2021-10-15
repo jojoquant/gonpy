@@ -3,6 +3,7 @@ package converter
 import (
 	"gonpy/trader"
 	"gonpy/trader/object"
+	"math"
 	"strings"
 )
 
@@ -29,10 +30,10 @@ type PositionHolding struct {
 	ShortTdFrozen  float64
 }
 
-func NewPositionHolding(contract *object.ContractData)*PositionHolding{
+func NewPositionHolding(contract *object.ContractData) *PositionHolding {
 	p := &PositionHolding{
-		VtSymbol: contract.VtSymbol,
-		Exchange: contract.Exchange,
+		VtSymbol:     contract.VtSymbol,
+		Exchange:     contract.Exchange,
 		ActiveOrders: make(map[string]*object.OrderData),
 	}
 	return p
@@ -159,19 +160,128 @@ func (p *PositionHolding) CalculateFrozen() {
 	}
 }
 
-func (p *PositionHolding) ConvertOrderRequestSHFE(req *object.OrderRequest)[]*object.OrderRequest{
-	if req.Offset == trader.OPEN{
-		return []*object.OrderRequest{req,}
+func (p *PositionHolding) ConvertOrderRequestSHFE(req *object.OrderRequest) []*object.OrderRequest {
+	if req.Offset == trader.OPEN {
+		return []*object.OrderRequest{req}
 	}
 
 	return nil
 }
 
-func (p *PositionHolding) ConvertOrderRequestLock(req *object.OrderRequest)[]*object.OrderRequest{
-	return nil
+func (p *PositionHolding) ConvertOrderRequestLock(req *object.OrderRequest) []*object.OrderRequest {
+
+	var tdVolume, ydAvailable float64
+	if req.Direction == trader.LONG {
+		tdVolume = p.ShortTd
+		ydAvailable = p.ShortYd - p.ShortYdFrozen
+	} else {
+		tdVolume = p.LongTd
+		ydAvailable = p.LongYd - p.LongYdFrozen
+	}
+
+	// if there is tdVolume, we can only lock position
+	if tdVolume > 0 {
+		reqOpen := *req
+		reqOpen.Offset = trader.OPEN
+		return []*object.OrderRequest{&reqOpen}
+	}
+
+	// if no tdVolume, we close opposite yd position first
+	// then open new position
+	closeVolume := math.Min(req.Volume, ydAvailable)
+	openVolume := math.Max(0, req.Volume-ydAvailable)
+	reqSlice := make([]*object.OrderRequest, 0, 1)
+
+	if ydAvailable > 0 {
+		reqYd := *req
+		if (p.Exchange == trader.SHFE) || (p.Exchange == trader.INE) {
+			reqYd.Offset = trader.CLOSEYESTERDAY
+		} else {
+			reqYd.Offset = trader.CLOSE
+		}
+		reqYd.Volume = closeVolume
+		reqSlice = append(reqSlice, &reqYd)
+	}
+
+	if openVolume > 0 {
+		reqOpen := *req
+		reqOpen.Offset = trader.OPEN
+		reqOpen.Volume = openVolume
+		reqSlice = append(reqSlice, &reqOpen)
+	}
+
+	return reqSlice
 }
 
-func (p *PositionHolding) ConvertOrderRequestNet(req *object.OrderRequest)[]*object.OrderRequest{
-	return nil
-}
+func (p *PositionHolding) ConvertOrderRequestNet(req *object.OrderRequest) []*object.OrderRequest {
 
+	var posAvailable, tdAvailable, ydAvailable float64
+	if req.Direction == trader.LONG {
+		posAvailable = p.ShortPos - p.ShortPosFrozen
+		tdAvailable = p.ShortTd - p.ShortTdFrozen
+		ydAvailable = p.ShortYd - p.ShortYdFrozen
+	} else {
+		posAvailable = p.LongPos - p.LongPosFrozen
+		tdAvailable = p.LongTd - p.LongTdFrozen
+		ydAvailable = p.LongYd - p.LongYdFrozen
+	}
+
+	reqSlice := make([]*object.OrderRequest, 0, 1)
+	volumeLeft := req.Volume
+
+	if (req.Exchange == trader.SHFE) || (req.Exchange == trader.INE) {
+
+		if tdAvailable > 0 {
+			tdVolume := math.Min(tdAvailable, volumeLeft)
+			volumeLeft -= tdVolume
+
+			tdReq := *req
+			tdReq.Offset = trader.CLOSETODAY
+			tdReq.Volume = tdVolume
+			reqSlice = append(reqSlice, &tdReq)
+		}
+
+		if (volumeLeft > 0) && (ydAvailable > 0) {
+			ydVolume := math.Min(ydAvailable, volumeLeft)
+			volumeLeft -= ydVolume
+
+			ydReq := *req
+			ydReq.Offset = trader.CLOSEYESTERDAY
+			ydReq.Volume = ydVolume
+			reqSlice = append(reqSlice, &ydReq)
+		}
+
+		if volumeLeft > 0 {
+			openVolume := volumeLeft
+
+			openReq := *req
+			openReq.Offset = trader.OPEN
+			openReq.Volume = openVolume
+			reqSlice = append(reqSlice, &openReq)
+		}
+
+		return reqSlice
+
+	} else {
+		if posAvailable > 0 {
+			closeVolume := math.Min(posAvailable, volumeLeft)
+			volumeLeft -= posAvailable
+
+			closeReq := *req
+			closeReq.Offset = trader.CLOSE
+			closeReq.Volume = closeVolume
+			reqSlice = append(reqSlice, &closeReq)
+		}
+
+		if volumeLeft > 0 {
+			openVolume := volumeLeft
+
+			openReq := *req
+			openReq.Offset = trader.OPEN
+			openReq.Volume = openVolume
+			reqSlice = append(reqSlice, &openReq)
+		}
+
+		return reqSlice
+	}
+}
