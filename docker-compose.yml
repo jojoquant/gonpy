@@ -5,8 +5,8 @@ services:
   mongo:
     image: mongo:latest
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=gonpy
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: gonpy
     ports:
       - 27017:27017
     networks:
@@ -39,12 +39,12 @@ services:
     volumes:
       - influxdb_volume:/var/lib/influxdb
     environment:
-      - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
       # password 长度要大于8个字符
-      - DOCKER_INFLUXDB_INIT_PASSWORD=gonpygonpy
-      - DOCKER_INFLUXDB_INIT_ORG=myorg 
-      - DOCKER_INFLUXDB_INIT_BUCKET=mybucket
+      DOCKER_INFLUXDB_INIT_PASSWORD: gonpygonpy
+      DOCKER_INFLUXDB_INIT_ORG: myorg 
+      DOCKER_INFLUXDB_INIT_BUCKET: mybucket
     restart: always
 
   grafana:

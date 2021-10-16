@@ -15,6 +15,8 @@ kill pid
 ```
 
 ## Docker 相关
+docker-compose.yml [version 3 编写说明在此](https://docs.docker.com/compose/compose-file/compose-file-v3/)
+
 启动容器:
 > docker-compose up -d
 

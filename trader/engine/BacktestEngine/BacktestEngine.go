@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-gota/gota/dataframe"
 	"github.com/go-gota/gota/series"
+	"github.com/influxdata/influxdb-client-go/v2"
 	"github.com/montanaflynn/stats"
 	"go.mongodb.org/mongo-driver/bson"
 )
@@ -81,7 +82,7 @@ type BacktestEngine struct {
 	Tick     *database.TickData
 	Datetime time.Time
 
-	Database *database.MongoDB
+	Database  *database.MongoDB
 	DisplayDB *database.InfluxDB
 
 	Days            int
@@ -105,13 +106,14 @@ type BacktestEngine struct {
 	DailyResultsKeys []string
 	Dailydf          dataframe.DataFrame
 
-	HasCalculated bool  // 用于标记回测结果是否统计过
+	HasCalculated bool // 用于标记回测结果是否统计过
 }
 
-func NewBacktestEngine(param Parameters, database *database.MongoDB, strategy strategy.Strategyer) *BacktestEngine {
+func NewBacktestEngine(param Parameters, database *database.MongoDB, displayDB *database.InfluxDB, strategy strategy.Strategyer) *BacktestEngine {
 
 	b := &BacktestEngine{
 		Database:          database,
+		DisplayDB:         displayDB,
 		Parameters:        param,
 		Gateway:           "BacktestEngine",
 		Strategy:          strategy,
@@ -181,8 +183,8 @@ func (b *BacktestEngine) LoadTick(
 
 func (b *BacktestEngine) AddStrategy() {}
 
-func (b *BacktestEngine) RunBacktest() {
-	
+func (b *BacktestEngine) RunBacktest(showProgress, saveBarToDisplayDB bool) {
+
 	b.HasCalculated = false
 	b.Strategy.OnInit()
 
@@ -216,9 +218,38 @@ func (b *BacktestEngine) RunBacktest() {
 			return
 		}
 
-		for _, data := range b.HistoryBarData {
+		for i, data := range b.HistoryBarData[index:] {
 			b.NewBar(data)
-			// log.Printf("当前回放进度: %d / %d \n", i, len(b.HistoryBarData[index:]))
+
+			if showProgress {
+				log.Printf("当前回放进度: %d / %d \n", i, len(b.HistoryBarData[index:]))
+			}
+
+			if saveBarToDisplayDB {
+				p := influxdb2.NewPoint(
+					fmt.Sprintf("bar_data_%s", b.Strategy.GetStrategyName()),
+					map[string]string{
+						"id":       fmt.Sprintf("%d", i),
+						"symbol":   data.Symbol,
+						"exchange": string(data.Exchange),
+						"interval": string(data.Interval),
+					},
+					map[string]interface{}{
+						"open_price":    data.Open,
+						"high_price":    data.High,
+						"low_price":     data.Low,
+						"close_price":   data.Close,
+						"open_interest": data.OpenInterest,
+						"volume":        data.Volume,
+					},
+					// data.Datetime)
+					time.Now())
+				b.DisplayDB.Write(p)
+			}
+
+			if saveBarToDisplayDB && !b.DisplayDB.Blocking {
+				b.DisplayDB.Flush()
+			}
 		}
 
 	} else if b.Mode == trader.TickMode {
@@ -543,8 +574,6 @@ func (b *BacktestEngine) CalculateResult() map[string]interface{} {
 	b.Dailydf = dataframe.ReadJSON(strings.NewReader(string(drJson)))
 	DailydfLength := b.Dailydf.Nrow()
 	balance, _ := stats.CumulativeSum(b.Dailydf.Col("NetPnl").Float())
-	
-	b.HasCalculated = true
 
 	// 计算 return
 	returnS := make([]float64, DailydfLength)
@@ -580,6 +609,7 @@ func (b *BacktestEngine) CalculateResult() map[string]interface{} {
 	b.Dailydf = b.Dailydf.Mutate(series.New(balance, series.Float, "Balance"))
 	b.Dailydf = b.Dailydf.Mutate(series.New(returnS, series.Float, "Return"))
 
+	b.HasCalculated = true
 	//TODO save HistoryBardata and dailydf into influxdb to display on grafana
 
 	startDate := b.Dailydf.Select("Date").Records()[1][0]
@@ -668,46 +698,45 @@ func (b *BacktestEngine) CalculateResult() map[string]interface{} {
 	log.Println("收益标准差:", strconv.FormatFloat(returnStd, 'f', 2, 64), "%")
 	log.Println("Sharp Ratio:", strconv.FormatFloat(sharpRatio, 'f', 2, 64))
 	log.Println("收益回撤比:", strconv.FormatFloat(returnDarwdownRatio, 'f', 2, 64))
-	
+
 	log.Println("----------------------------------------------")
 	log.Println("策略统计指标计算完成")
-	
+
 	statistics := map[string]interface{}{
-		"startDate":startDate,
-		"endDate":endDate,
-		"totalDays":totalDays,
-		"profitDays":profitDays,
-		"lossDays":lossDays,
-		"capital":b.Capital,
-		"endBalance":endBalance,
-		"maxDrawdown":maxDrawdown,
-		"maxDDpercent":maxDDpercent,
-		"maxDrawdownDuration":maxDrawdownDuration,
-		"totalNetPnl":totalNetPnl,
-		"dailyNetPnl":dailyNetPnl,
-		"totalCommission":totalCommission,
-		"dailyCommission":dailyCommission,
-		"totalSlippage":totalSlippage,
-		"dailySlippage":dailySlippage,
-		"totalTurnover":totalTurnover,
-		"dailyTurnover":dailyTurnover,
-		"totalTradeCount":totalTradeCount,
-		"dailyTradeCount":dailyTradeCount,
-		"totalReturn":totalReturn,
-		"annualReturn":annualReturn,
-		"dailyReturn":dailyReturn,
-		"returnStd":returnStd,
-		"sharpRatio":sharpRatio,
-		"returnDarwdownRatio":returnDarwdownRatio,
+		"startDate":           startDate,
+		"endDate":             endDate,
+		"totalDays":           totalDays,
+		"profitDays":          profitDays,
+		"lossDays":            lossDays,
+		"capital":             b.Capital,
+		"endBalance":          endBalance,
+		"maxDrawdown":         maxDrawdown,
+		"maxDDpercent":        maxDDpercent,
+		"maxDrawdownDuration": maxDrawdownDuration,
+		"totalNetPnl":         totalNetPnl,
+		"dailyNetPnl":         dailyNetPnl,
+		"totalCommission":     totalCommission,
+		"dailyCommission":     dailyCommission,
+		"totalSlippage":       totalSlippage,
+		"dailySlippage":       dailySlippage,
+		"totalTurnover":       totalTurnover,
+		"dailyTurnover":       dailyTurnover,
+		"totalTradeCount":     totalTradeCount,
+		"dailyTradeCount":     dailyTradeCount,
+		"totalReturn":         totalReturn,
+		"annualReturn":        annualReturn,
+		"dailyReturn":         dailyReturn,
+		"returnStd":           returnStd,
+		"sharpRatio":          sharpRatio,
+		"returnDarwdownRatio": returnDarwdownRatio,
 	}
-	return statistics 
+	return statistics
 }
 
-func(b *BacktestEngine) SaveBacktestResultToInfluxDB(){
-	if !b.HasCalculated{
+func (b *BacktestEngine) SaveBacktestResultToInfluxDB() {
+	if !b.HasCalculated {
 		log.Println("未完成统计，禁止保存数据到 InfluxDB")
 		return
 	}
-
 
 }

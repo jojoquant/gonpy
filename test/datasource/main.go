@@ -17,9 +17,9 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-func MapGoExKlinePeriodToVnpyInterval(kp goex.KlinePeriod)trader.Interval{
+func MapGoExKlinePeriodToVnpyInterval(kp goex.KlinePeriod) trader.Interval {
 	var i trader.Interval
-	switch kp{
+	switch kp {
 	case goex.KLINE_PERIOD_1MIN:
 		i = trader.MINUTE
 	case goex.KLINE_PERIOD_1H:
@@ -36,11 +36,12 @@ func MapGoExKlinePeriodToVnpyInterval(kp goex.KlinePeriod)trader.Interval{
 }
 
 func temp() {
-	beginTime := time.Date(2021, 9, 19, 0, 0, 0, 0, time.Local) //开始时间2017年12月18日,需自行修改
-	var klinePeriod goex.KlinePeriod = goex.KLINE_PERIOD_1MIN    //see: github.com/nntaoli-project/goex/Const.go
+	beginTime := time.Date(2021, 10, 1, 0, 0, 0, 0, time.Local) //开始时间2017年12月18日,需自行修改
+	// var klinePeriod goex.KlinePeriod = goex.KLINE_PERIOD_1MIN    //see: github.com/nntaoli-project/goex/Const.go
+	var klinePeriod goex.KlinePeriod = goex.KLINE_PERIOD_1MIN //see: github.com/nntaoli-project/goex/Const.go
 	dbInterval := MapGoExKlinePeriodToVnpyInterval(klinePeriod)
 	currencyPair := goex.ETH_BTC
-	proxyUrl := "http://127.0.0.1:7890"  // 国内目前不挂代理无法请求数据
+	proxyUrl := "http://127.0.0.1:7890" // 国内目前不挂代理无法请求数据
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -68,18 +69,22 @@ func temp() {
 		HttpClient: httpClient,
 	})
 
-
 	since := map[string]interface{}{
 		"startTime": int(beginTime.Unix()) * 1000,
 		// "endTime": int(endTime.Unix()) * 1000,
 	}
 	interval := time.NewTimer(200 * time.Millisecond)
 
-	db := database.NewMongoDB("192.168.0.113", 27017)
+	dk := util.GetDockerComposeYml("../../docker-compose.yml")
+	// db := database.NewMongoDB("192.168.0.113", 27017)
+	db := database.NewMongoDB(
+		"localhost", dk.Services.Mongo.PortSrc,
+		dk.Services.Mongo.Env.Username, dk.Services.Mongo.Env.Password)
+
 	insertParam := &database.InsertParam{
-		Db: "binance",
+		Db:         "binance",
 		Collection: "db_bar_data",
-		Ordered: false,
+		Ordered:    false,
 	}
 
 	dataNum := 0
@@ -98,17 +103,17 @@ func temp() {
 			insertParam.Docs = make([]interface{}, 0)
 			for _, k := range klines {
 				insertParam.Docs = append(insertParam.Docs, bson.M{
-					"datetime":time.Unix(k.Timestamp,0),
-					"symbol":k.Pair.String(),
-					"open_price":k.Open,
-					"high_price":k.High,
-					"low_price":k.Low,
-					"close_price":k.Close,
-					"volume":k.Vol,
-					"interval": dbInterval,
-					"exchange":trader.BINANCE,
-					"open_interest":0,
-					"turnover":0,
+					"datetime":      time.Unix(k.Timestamp, 0),
+					"symbol":        k.Pair.String(),
+					"open_price":    k.Open,
+					"high_price":    k.High,
+					"low_price":     k.Low,
+					"close_price":   k.Close,
+					"volume":        k.Vol,
+					"interval":      dbInterval,
+					"exchange":      trader.BINANCE,
+					"open_interest": 0,
+					"turnover":      0,
 				})
 			}
 			db.InsertMany(insertParam)
@@ -123,10 +128,10 @@ func temp() {
 			interval.Reset(200 * time.Millisecond)
 		}
 
-		log.Println("当前数据量为: ",dataNum, "条.", "最后数据日期:", time.Unix(int64(startTime/1000),0))
+		log.Println("当前数据量为: ", dataNum, "条.", "最后数据日期:", time.Unix(int64(startTime/1000), 0))
 	}
 }
 
-func main(){
+func main() {
 	util.FuncExecDuration("main", temp)
 }

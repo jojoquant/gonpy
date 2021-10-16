@@ -3,7 +3,7 @@ package strategy
 import (
 	"github.com/markcheno/go-talib"
 	"gonpy/trader/database"
-	"log"
+	// "log"
 )
 
 type DualMA struct {
@@ -13,12 +13,12 @@ type DualMA struct {
 	slowWindow int
 
 	fastMa  []float64
-	fastMa0 float64
-	fastMa1 float64
+	// fastMa0 float64
+	// fastMa1 float64
 
 	slowMa  []float64
-	slowMa0 float64
-	slowMa1 float64
+	// slowMa0 float64
+	// slowMa1 float64
 
 	lenCount    int
 	arrayLenMax int
@@ -40,7 +40,7 @@ func NewDualMA() *DualMA {
 }
 
 func (d *DualMA) OnBar(bar *database.BarData) {
-	log.Println("Dual MA on bar:", bar)
+	// log.Println("Dual MA on bar:", bar)
 
 	d.lenCount++
 	d.closeArray = append(d.closeArray, bar.Close)

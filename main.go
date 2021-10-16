@@ -20,8 +20,7 @@ func main() {
 		Interval: 1,
 		Queue:    make(chan *trader.Event, 0),
 		Active:   false,
-		Thread:   "",
-		Timer:    "",
+
 		Handlers: map[string][]engine.HandlerFunc{
 			"eTimer":  {},
 			"eTimer2": {ETimerHandlerFunc, ETimerHandlerFunc2},

@@ -35,8 +35,8 @@ func main() {
 	e.Put(event1)
 	e.Put(event2)
 	time.Sleep(2 * time.Second)
-	e.Unregister("eTimer", ETimerHandlerFunc)
-	e.Stop()
+	// e.Unregister("eTimer", ETimerHandlerFunc)
+	// e.Stop()
 
 	select {}
 }

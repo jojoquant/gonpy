@@ -30,14 +30,19 @@ type InsertParam struct {
 	Doc        bson.M        // for InsertOne
 }
 
-func NewMongoDB(host string, port int) *MongoDB {
+func NewMongoDB(host string, port int, username, password string) *MongoDB {
 	m := &MongoDB{
 		URI: fmt.Sprintf("mongodb://%s:%d", host, port),
 		ctx: context.TODO(),
 	}
+
+	credential := options.Credential{
+		Username: username,
+		Password: password,
+	}
 	// Set client options
 	// "mongodb://192.168.0.113:27017"
-	clientOptions := options.Client().ApplyURI(m.URI)
+	clientOptions := options.Client().ApplyURI(m.URI).SetAuth(credential)
 
 	// Connect to MongoDB
 	client, err := mongo.Connect(m.ctx, clientOptions)
