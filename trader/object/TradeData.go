@@ -3,7 +3,7 @@ package object
 import (
 	"fmt"
 	"time"
-	. "gonpy/trader"
+	"gonpy/trader"
 )
 
 type TradeData struct {
@@ -14,8 +14,8 @@ type TradeData struct {
 	OrderId string
 	TradeId string
 
-	Direction Direction
-	Offset    Offset
+	Direction trader.Direction
+	Offset    trader.Offset
 
 	Price    float64
 	Volume   float64
@@ -24,7 +24,7 @@ type TradeData struct {
 
 func NewTradeData(
 	gateway, symbol, orderId, tradeId string,
-	exchange Exchange, direction Direction, offset Offset,
+	exchange trader.Exchange, direction trader.Direction, offset trader.Offset,
 	price, volume float64,
 	datetime time.Time,
 ) *TradeData {

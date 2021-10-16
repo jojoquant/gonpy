@@ -2,7 +2,7 @@ package object
 
 import (
 	"fmt"
-	. "gonpy/trader"
+	"gonpy/trader"
 	"time"
 )
 
@@ -26,8 +26,8 @@ type StopOrderData struct {
 // traded 默认为 0
 // Status 默认为 WAITING = "等待中"
 func NewStopOrderData(
-	gateway, symbol string, exchange Exchange,
-	direction Direction, offset Offset,
+	gateway, symbol string, exchange trader.Exchange,
+	direction trader.Direction, offset trader.Offset,
 	price, volume float64,
 	strategyName, stopOrderId string, 
 	datetime time.Time,
@@ -41,7 +41,7 @@ func NewStopOrderData(
 	order.Offset = offset
 	order.Price = price
 	order.Volume = volume
-	order.Status = WAITING
+	order.Status = trader.WAITING
 	order.IsActive = true
 	order.Datetime = datetime
 

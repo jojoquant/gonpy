@@ -3,10 +3,10 @@ package BacktestEngine
 import (
 	"encoding/json"
 	"fmt"
-	. "gonpy/trader"
+	"gonpy/trader"
 	"gonpy/trader/database"
 	"gonpy/trader/engine"
-	. "gonpy/trader/object"
+	"gonpy/trader/object"
 	"gonpy/trader/strategy"
 	"gonpy/trader/util"
 	"log"
@@ -23,7 +23,7 @@ import (
 
 type Parameters struct {
 	Symbol   string
-	Exchange Exchange
+	Exchange trader.Exchange
 	VtSymbol string
 
 	Start time.Time
@@ -38,17 +38,17 @@ type Parameters struct {
 
 	AnnualDays int
 
-	Mode     BacktestMode
-	Interval Interval
+	Mode     trader.BacktestMode
+	Interval trader.Interval
 	Inverse  bool
 }
 
 func NewParameters(
 	symbol string,
-	exchange Exchange,
+	exchange trader.Exchange,
 	start, end time.Time,
 	rate, slippage, size, priceTick, capital, riskFree float64,
-	mode BacktestMode, interval Interval, inverse bool,
+	mode trader.BacktestMode, interval trader.Interval, inverse bool,
 ) Parameters {
 	p := Parameters{
 		Symbol:     symbol,
@@ -90,16 +90,16 @@ type BacktestEngine struct {
 	HistoryBarData  []*database.BarData
 	HistoryTickData []*database.TickData
 
-	ActiveLimitOrders map[string]*OrderData
-	LimitOrders       map[string]*OrderData
+	ActiveLimitOrders map[string]*object.OrderData
+	LimitOrders       map[string]*object.OrderData
 	LimitOrderCount   int
 
-	ActiveStopOrders map[string]*StopOrderData
-	StopOrders       map[string]*StopOrderData
+	ActiveStopOrders map[string]*object.StopOrderData
+	StopOrders       map[string]*object.StopOrderData
 	StopOrderCount   int
 
 	TradeCount int
-	Trades     map[string]*TradeData
+	Trades     map[string]*object.TradeData
 
 	DailyResults     map[string]*DailyResult
 	DailyResultsKeys []string
@@ -115,11 +115,11 @@ func NewBacktestEngine(param Parameters, database *database.MongoDB, strategy st
 		Parameters:        param,
 		Gateway:           "BacktestEngine",
 		Strategy:          strategy,
-		ActiveLimitOrders: make(map[string]*OrderData),
-		ActiveStopOrders:  make(map[string]*StopOrderData),
-		LimitOrders:       make(map[string]*OrderData),
-		StopOrders:        make(map[string]*StopOrderData),
-		Trades:            make(map[string]*TradeData),
+		ActiveLimitOrders: make(map[string]*object.OrderData),
+		ActiveStopOrders:  make(map[string]*object.StopOrderData),
+		LimitOrders:       make(map[string]*object.OrderData),
+		StopOrders:        make(map[string]*object.StopOrderData),
+		Trades:            make(map[string]*object.TradeData),
 		DailyResults:      make(map[string]*DailyResult),
 		DailyResultsKeys:  make([]string, 0, 50),
 	}
@@ -145,7 +145,7 @@ func (b *BacktestEngine) SetEventEngine(eventEngine *engine.EventEngine) {
 	b.EventEngine = eventEngine
 }
 
-func (b *BacktestEngine) LoadData() {
+func (b *BacktestEngine) LoadData(q *database.QueryParam) {
 	if b.Start.After(b.End) {
 		log.Fatalln("起始日期必须小于结束日期")
 		return
@@ -153,22 +153,19 @@ func (b *BacktestEngine) LoadData() {
 
 	log.Println("加载数据: ", b.Start, " -> ", b.End)
 
-	b.HistoryBarData = b.Database.Query(
-		&database.QueryParam{
-			Db:         "vnpy",
-			Collection: "db_bar_data",
-			Filter: bson.M{
-				"symbol": b.Symbol, "exchange": b.Exchange, "interval": b.Interval,
-				"datetime": bson.M{"$gte": b.Start, "$lte": b.End}},
-		},
-	)
+	q.Filter = bson.M{
+		"symbol": b.Symbol, "exchange": b.Exchange, "interval": b.Interval,
+		"datetime": bson.M{"$gte": b.Start, "$lte": b.End},
+	}
+
+	b.HistoryBarData = b.Database.Query(q)
 
 	b.Database.Close()
 }
 
 func (b *BacktestEngine) LoadBar(
 	vtSymbol string, days int,
-	interval Interval, callback strategy.BarCallback,
+	interval trader.Interval, callback strategy.BarCallback,
 	useDatabase bool) {
 	b.Days = days
 	b.BarCallback = callback
@@ -191,7 +188,7 @@ func (b *BacktestEngine) RunBacktest() {
 
 	var index int
 	dayCount := 0
-	if b.Mode == BarMode {
+	if b.Mode == trader.BarMode {
 		for ix, data := range b.HistoryBarData {
 			if !b.Datetime.IsZero() && (data.Datetime.Day() != b.Datetime.Day()) {
 				dayCount++
@@ -219,12 +216,12 @@ func (b *BacktestEngine) RunBacktest() {
 			return
 		}
 
-		for i, data := range b.HistoryBarData {
+		for _, data := range b.HistoryBarData {
 			b.NewBar(data)
-			log.Printf("当前回放进度: %d / %d \n", i, len(b.HistoryBarData[index:]))
+			// log.Printf("当前回放进度: %d / %d \n", i, len(b.HistoryBarData[index:]))
 		}
 
-	} else if b.Mode == TickMode {
+	} else if b.Mode == trader.TickMode {
 		for _, data := range b.HistoryTickData {
 			if !b.Datetime.IsZero() && (data.Datetime.Day() != b.Datetime.Day()) {
 				dayCount++
@@ -269,25 +266,25 @@ func (b *BacktestEngine) CrossLimitOrder(strategy strategy.Strategyer, vtOrderId
 	var longBestPrice float64
 	var shortBestPrice float64
 
-	if b.Mode == BarMode {
+	if b.Mode == trader.BarMode {
 		longCrossPrice = b.Bar.Low
 		shortCrossPrice = b.Bar.High
 		longBestPrice = b.Bar.Open
 		shortBestPrice = b.Bar.Open
-	} else if b.Mode == TickMode {
+	} else if b.Mode == trader.TickMode {
 		log.Println("Tick mode TODO")
 	}
 
 	for _, limitOrder := range b.ActiveLimitOrders {
-		if limitOrder.Status == SUBMITTING {
-			limitOrder.Status = NOTTRADED
+		if limitOrder.Status == trader.SUBMITTING {
+			limitOrder.Status = trader.NOTTRADED
 			// TODO 传入策略中的响应函数中
 			// b.strategy.OnOrder(order)
 		}
 
 		// Check whether limit order can be filled
-		longCross := (limitOrder.Direction == LONG && limitOrder.Price >= longCrossPrice && longCrossPrice > 0)
-		shortCross := (limitOrder.Direction == SHORT && limitOrder.Price <= shortCrossPrice && shortCrossPrice > 0)
+		longCross := (limitOrder.Direction == trader.LONG && limitOrder.Price >= longCrossPrice && longCrossPrice > 0)
+		shortCross := (limitOrder.Direction == trader.SHORT && limitOrder.Price <= shortCrossPrice && shortCrossPrice > 0)
 
 		if !longCross && !shortCross {
 			continue
@@ -295,23 +292,24 @@ func (b *BacktestEngine) CrossLimitOrder(strategy strategy.Strategyer, vtOrderId
 
 		// Push order update with status "all traded" (filled)
 		limitOrder.Traded = limitOrder.Volume
-		limitOrder.Status = ALLTRADED
+		limitOrder.Status = trader.ALLTRADED
 		// TODO 传入策略中的响应函数中
 		// b.strategy.OnOrder(order)
 		delete(b.ActiveLimitOrders, limitOrder.VtOrderId)
 
 		b.TradeCount++
 
-		var tradePrice, posChange float64
+		var tradePrice float64
+		// var posChange float64
 		if longCross {
 			tradePrice = math.Min(limitOrder.Price, longBestPrice)
-			posChange = limitOrder.Volume
+			// posChange = limitOrder.Volume
 		} else if shortCross {
 			tradePrice = math.Max(limitOrder.Price, shortBestPrice)
-			posChange = -limitOrder.Volume
+			// posChange = -limitOrder.Volume
 		}
 
-		trade := NewTradeData(
+		trade := object.NewTradeData(
 			b.Gateway, limitOrder.Symbol, limitOrder.OrderId,
 			fmt.Sprintf("%d", b.TradeCount),
 			limitOrder.Exchange, limitOrder.Direction, limitOrder.Offset,
@@ -319,7 +317,7 @@ func (b *BacktestEngine) CrossLimitOrder(strategy strategy.Strategyer, vtOrderId
 		)
 
 		//TODO strategy.pos+=poschange
-		log.Println(posChange)
+		// log.Println(posChange)
 		//TODO strategy.OnTrade(trade)
 		b.Trades[trade.VtTradeId] = trade
 	}
@@ -331,12 +329,12 @@ func (b *BacktestEngine) CrossStopOrder(strategy strategy.Strategyer, vtOrderId 
 	var longBestPrice float64
 	var shortBestPrice float64
 
-	if b.Mode == BarMode {
+	if b.Mode == trader.BarMode {
 		longCrossPrice = b.Bar.High
 		shortCrossPrice = b.Bar.Low
 		longBestPrice = b.Bar.Open
 		shortBestPrice = b.Bar.Open
-	} else if b.Mode == TickMode {
+	} else if b.Mode == trader.TickMode {
 		log.Println("Tick mode TODO")
 	}
 
@@ -348,8 +346,8 @@ func (b *BacktestEngine) CrossStopOrder(strategy strategy.Strategyer, vtOrderId 
 		// }
 
 		// Check whether limit order can be filled
-		longCross := (stopOrder.Direction == LONG && stopOrder.Price <= longCrossPrice && longCrossPrice > 0)
-		shortCross := (stopOrder.Direction == SHORT && stopOrder.Price >= shortCrossPrice && shortCrossPrice > 0)
+		longCross := (stopOrder.Direction == trader.LONG && stopOrder.Price <= longCrossPrice && longCrossPrice > 0)
+		shortCross := (stopOrder.Direction == trader.SHORT && stopOrder.Price >= shortCrossPrice && shortCrossPrice > 0)
 
 		if !longCross && !shortCross {
 			continue
@@ -365,11 +363,11 @@ func (b *BacktestEngine) CrossStopOrder(strategy strategy.Strategyer, vtOrderId 
 		// turn stop order into limit order
 		b.LimitOrderCount++
 		// limit orderId +1
-		fromStopToLimitOrder := NewOrderData(
+		fromStopToLimitOrder := object.NewOrderData(
 			stopOrder.Gateway, stopOrder.Symbol, stopOrder.Exchange,
 			fmt.Sprint(b.LimitOrderCount), stopOrder.Direction,
 			stopOrder.Offset, stopOrder.Price, stopOrder.Volume,
-			ALLTRADED, b.Datetime,
+			trader.ALLTRADED, b.Datetime,
 		)
 
 		b.LimitOrders[fromStopToLimitOrder.VtOrderId] = fromStopToLimitOrder
@@ -386,7 +384,7 @@ func (b *BacktestEngine) CrossStopOrder(strategy strategy.Strategyer, vtOrderId 
 
 		b.TradeCount++
 
-		trade := NewTradeData(
+		trade := object.NewTradeData(
 			b.Gateway, fromStopToLimitOrder.Symbol, fromStopToLimitOrder.OrderId,
 			fmt.Sprintf("%d", b.TradeCount),
 			fromStopToLimitOrder.Exchange, fromStopToLimitOrder.Direction, fromStopToLimitOrder.Offset,
@@ -396,7 +394,7 @@ func (b *BacktestEngine) CrossStopOrder(strategy strategy.Strategyer, vtOrderId 
 
 		// Update stop order
 		// stop_order.vt_orderids 这里没有按照vnpy写, 感觉没什么用
-		stopOrder.Status = TRIGGERED
+		stopOrder.Status = trader.TRIGGERED
 		// stop order 状态变为 triggered 存回StopOrders中
 		b.StopOrders[stopOrder.VtOrderId] = stopOrder
 		delete(b.ActiveStopOrders, stopOrder.OrderId)
@@ -422,13 +420,13 @@ func (b *BacktestEngine) UpdateDailyClose(close float64) {
 
 func (b *BacktestEngine) SendOrder(
 	strategy strategy.Strategyer,
-	direction Direction,
-	offset Offset,
+	direction trader.Direction,
+	offset trader.Offset,
 	price, volume float64,
 	stop, lock, net bool) string {
 
 	var vtOrderId string
-	var contract *ContractData
+	var contract *object.ContractData
 	price = util.RoundTo(price, b.PriceTick)
 
 	if stop {
@@ -441,16 +439,16 @@ func (b *BacktestEngine) SendOrder(
 }
 
 func (b *BacktestEngine) SendStopOrder(
-	strategy strategy.Strategyer, contract *ContractData,
-	direction Direction, offset Offset,
+	strategy strategy.Strategyer, contract *object.ContractData,
+	direction trader.Direction, offset trader.Offset,
 	price, volume float64, lock, net bool,
 ) string {
 
 	b.StopOrderCount++
-	stopOrder := NewStopOrderData(
-		b.Gateway, b.Symbol, Exchange(b.Parameters.Exchange),
+	stopOrder := object.NewStopOrderData(
+		b.Gateway, b.Symbol, trader.Exchange(b.Parameters.Exchange),
 		direction, offset, price, volume, strategy.GetStrategyName(),
-		fmt.Sprintf("%s.%d", STOP, b.StopOrderCount), b.Datetime)
+		fmt.Sprintf("%s.%d", trader.STOP, b.StopOrderCount), b.Datetime)
 
 	b.ActiveStopOrders[stopOrder.StopOrderId] = stopOrder
 	b.StopOrders[stopOrder.StopOrderId] = stopOrder
@@ -459,15 +457,15 @@ func (b *BacktestEngine) SendStopOrder(
 }
 
 func (b *BacktestEngine) SendLimitOrder(
-	strategy strategy.Strategyer, contract *ContractData,
-	direction Direction, offset Offset,
+	strategy strategy.Strategyer, contract *object.ContractData,
+	direction trader.Direction, offset trader.Offset,
 	price, volume float64, lock, net bool,
 ) string {
 
 	b.LimitOrderCount++
-	order := NewOrderData(
+	order := object.NewOrderData(
 		b.Gateway, b.Symbol, b.Exchange, fmt.Sprintf("%d", b.LimitOrderCount),
-		direction, offset, price, volume, SUBMITTING, b.Datetime)
+		direction, offset, price, volume, trader.SUBMITTING, b.Datetime)
 
 	b.ActiveLimitOrders[order.VtOrderId] = order
 	b.LimitOrders[order.VtOrderId] = order
@@ -476,7 +474,7 @@ func (b *BacktestEngine) SendLimitOrder(
 }
 
 func (b *BacktestEngine) CancelOrder(strategy strategy.Strategyer, vtOrderId string) {
-	if strings.HasPrefix(vtOrderId, string(STOP)) {
+	if strings.HasPrefix(vtOrderId, string(trader.STOP)) {
 		b.CancelStopOrder(strategy, vtOrderId)
 	} else {
 		b.CancelLimitOrder(strategy, vtOrderId)
@@ -486,7 +484,7 @@ func (b *BacktestEngine) CancelOrder(strategy strategy.Strategyer, vtOrderId str
 
 func (b *BacktestEngine) CancelStopOrder(strategy strategy.Strategyer, vtOrderId string) {
 	if order, ok := b.ActiveStopOrders[vtOrderId]; ok {
-		order.Status = CANCELLED
+		order.Status = trader.CANCELLED
 		b.Strategy.OnStopOrder(order)
 		delete(b.ActiveStopOrders, vtOrderId)
 	}
@@ -494,7 +492,7 @@ func (b *BacktestEngine) CancelStopOrder(strategy strategy.Strategyer, vtOrderId
 
 func (b *BacktestEngine) CancelLimitOrder(strategy strategy.Strategyer, vtOrderId string) {
 	if order, ok := b.ActiveLimitOrders[vtOrderId]; ok {
-		order.Status = CANCELLED
+		order.Status = trader.CANCELLED
 		b.Strategy.OnOrder(order)
 		delete(b.ActiveLimitOrders, vtOrderId)
 	}

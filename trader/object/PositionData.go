@@ -2,14 +2,14 @@ package object
 
 import (
 	"fmt"
-	. "gonpy/trader"
+	"gonpy/trader"
 )
 
 type PositionData struct {
 	BaseData
 	VtPositionId string // "gateway.OrderId"
 
-	Direction Direction
+	Direction trader.Direction
 
 	Volume   float64
 	Frozen   float64
@@ -19,8 +19,8 @@ type PositionData struct {
 }
 
 func NewPositionData(
-	gateway, symbol string, exchange Exchange,
-	direction Direction,
+	gateway, symbol string, exchange trader.Exchange,
+	direction trader.Direction,
 	price, volume, traded float64,
 ) *PositionData {
 	p := &PositionData{

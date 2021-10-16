@@ -3,7 +3,7 @@ package object
 import (
 	"fmt"
 	"time"
-	. "gonpy/trader"
+	"gonpy/trader"
 )
 
 type OrderData struct {
@@ -11,14 +11,14 @@ type OrderData struct {
 	VtOrderId string // "gateway.OrderId"
 
 	OrderId   string
-	OrderType OrderType
-	Direction Direction
-	Offset    Offset
+	OrderType trader.OrderType
+	Direction trader.Direction
+	Offset    trader.Offset
 
 	Price    float64
 	Volume   float64
 	Traded   float64
-	Status   Status
+	Status   trader.Status
 	Datetime time.Time
 	Reference string
 
@@ -28,15 +28,16 @@ type OrderData struct {
 // OrderType 默认为 LIMIT 
 // Traded 默认为 0.0
 // Reference 默认为 ""
+// status 如无特殊情况, 传入SUBMITTING
 func NewOrderData(
-	gateway, symbol string, exchange Exchange,
-	orderId string, direction Direction, offset Offset,
-	price, volume float64, status Status,
+	gateway, symbol string, exchange trader.Exchange,
+	orderId string, direction trader.Direction, offset trader.Offset,
+	price, volume float64, status trader.Status,
 	datetime time.Time,
 ) *OrderData {
 	order := &OrderData{
 		OrderId:   orderId,
-		OrderType: LIMIT,
+		OrderType: trader.LIMIT,
 		Direction: direction,
 		Offset:    offset,
 
@@ -52,7 +53,7 @@ func NewOrderData(
 	order.Gateway = gateway
 	order.VtOrderId = fmt.Sprintf("%s.%s", gateway, orderId)
 
-	for _, s := range ACTIVE_STATUSES {
+	for _, s := range trader.ACTIVE_STATUSES {
 		if s == status {
 			order.IsActive = true
 			break
