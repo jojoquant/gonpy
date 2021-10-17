@@ -37,11 +37,12 @@ type InfluxdbConfig struct {
 }
 
 type InfluxdbEnv struct {
-	Mode     string `mapstructure:"DOCKER_INFLUXDB_INIT_MODE"`
-	Username string `mapstructure:"DOCKER_INFLUXDB_INIT_USERNAME"`
-	Password string `mapstructure:"DOCKER_INFLUXDB_INIT_PASSWORD"`
-	Org      string `mapstructure:"DOCKER_INFLUXDB_INIT_ORG"`
-	Bucket   string `mapstructure:"DOCKER_INFLUXDB_INIT_BUCKET"`
+	Mode       string `mapstructure:"DOCKER_INFLUXDB_INIT_MODE"`
+	Username   string `mapstructure:"DOCKER_INFLUXDB_INIT_USERNAME"`
+	Password   string `mapstructure:"DOCKER_INFLUXDB_INIT_PASSWORD"`
+	Org        string `mapstructure:"DOCKER_INFLUXDB_INIT_ORG"`
+	Bucket     string `mapstructure:"DOCKER_INFLUXDB_INIT_BUCKET"`
+	AdminToken string `mapstructure:"DOCKER_INFLUXDB_INIT_ADMIN_TOKEN"`
 }
 
 func GetDockerComposeYml(filePath string) *DockerComposeYml {
