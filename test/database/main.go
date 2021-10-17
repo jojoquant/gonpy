@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"gonpy/trader/database"
+	"gonpy/trader/util"
 	"log"
 	"time"
 
@@ -75,11 +76,35 @@ func Temp() {
 
 }
 
-
 func main() {
-	m := database.NewMongoDB("192.168.0.113", 27017)
-	fmt.Println(m)
-	r := m.Query(&database.QueryParam{Db: "vnpy", Collection: "SHFE_d_AUL8", Filter: bson.M{}})
-	fmt.Println(r)
-	fmt.Println("r length: ", len(r), r[0], r[0].Close, r[0].Datetime)
+	// m := database.NewMongoDB("192.168.0.113", 27017)
+	// fmt.Println(m)
+	// r := m.Query(&database.QueryParam{Db: "vnpy", Collection: "SHFE_d_AUL8", Filter: bson.M{}})
+	// fmt.Println(r)
+	// fmt.Println("r length: ", len(r), r[0], r[0].Close, r[0].Datetime)
+
+	// 创建数据源和展示数据库
+	host := "localhost"
+	dk := util.GetDockerComposeYml("../../docker-compose.yml")
+
+	authToken := "yA1dAZx9t-fn7J4fCryJurEdVC8xPQM0esSqftx6hpfT0JST0BfEnCnbFKO5lxrE-ilZBxpvTSKfK0eLsrdWaQ=="
+	// authToken = "lAAs7a0buXNb88a4rb_ZKB1M9SxKqHKvGl_fSkwKAAIH-80NAw4SbzEpOPAWUgqr_KlxgurP4cNqolHggmN0pg=="
+	displayDB := database.NewInfluxDB(
+		host, dk.Services.Influxdb.PortSrc,
+		dk.Services.Influxdb.Env.Username, dk.Services.Influxdb.Env.Password,
+		authToken,
+		dk.Services.Influxdb.Env.Org, dk.Services.Influxdb.Env.Bucket,
+		false,
+	)
+
+	measurement := "bar_data_DualMA"
+	flux := fmt.Sprintf(`from(bucket:"%s")
+	|> range(start: -7d) 
+	|> filter(fn: (r) => r._measurement == "%s")
+	|> filter(fn: (r) => r._field == "close_price")`, displayDB.Bucket, measurement)
+	displayDB.Query(flux)
+
+	// displayDB.Delete(measurement)
+
+	displayDB.Close()
 }

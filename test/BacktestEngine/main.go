@@ -18,7 +18,7 @@ func main() {
 	// r := BacktestEngine.NewDailyResult("dsad", 12.3)
 	// fmt.Println(r)
 
-	start, _ := time.Parse("2006-01-02 15:04:05", "2021-04-25 12:00:33")
+	start, _ := time.Parse("2006-01-02 15:04:05", "2021-10-01 12:00:33")
 	end, _ := time.Parse("2006-01-02 15:04:05", "2021-10-31 15:00:00")
 
 	// , m, d := time.Now().Date()
@@ -28,19 +28,21 @@ func main() {
 		"ETH_BTC", "BINANCE", start, end, 0, 0, 1, math.Pow(10, -6),
 		math.Pow(10, 6), 0,
 		trader.BarMode, trader.MINUTE, false)
-	
+
 	// 创建数据源和展示数据库
 	host := "localhost"
 	dk := util.GetDockerComposeYml("../../docker-compose.yml")
-	
+
 	// db := database.NewMongoDB("192.168.0.113", 27017)
 	srcDB := database.NewMongoDB(
 		host, dk.Services.Mongo.PortSrc,
 		dk.Services.Mongo.Env.Username, dk.Services.Mongo.Env.Password)
-	
-	displayDB:= database.NewInfluxDB(
+
+	authToken := "yA1dAZx9t-fn7J4fCryJurEdVC8xPQM0esSqftx6hpfT0JST0BfEnCnbFKO5lxrE-ilZBxpvTSKfK0eLsrdWaQ=="
+	displayDB := database.NewInfluxDB(
 		host, dk.Services.Influxdb.PortSrc,
 		dk.Services.Influxdb.Env.Username, dk.Services.Influxdb.Env.Password,
+		authToken,
 		dk.Services.Influxdb.Env.Org, dk.Services.Influxdb.Env.Bucket,
 		false,
 	)
@@ -57,12 +59,12 @@ func main() {
 
 	// b.AddStrategy()
 
-	util.FuncExecDuration("RunBacktest", func(){b.RunBacktest(true, true)})
+	util.FuncExecDuration("RunBacktest", func() { b.RunBacktest(true, true) })
 	// b.RunBacktest()
 	sMap := b.CalculateResult()
-	
+
 	srcDB.Close()
 	displayDB.Close()
-	
+
 	log.Println(sMap)
 }

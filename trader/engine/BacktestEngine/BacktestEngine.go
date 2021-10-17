@@ -242,8 +242,7 @@ func (b *BacktestEngine) RunBacktest(showProgress, saveBarToDisplayDB bool) {
 						"open_interest": data.OpenInterest,
 						"volume":        data.Volume,
 					},
-					// data.Datetime)
-					time.Now())
+					data.Datetime)
 				b.DisplayDB.Write(p)
 			}
 
