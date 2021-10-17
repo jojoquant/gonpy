@@ -87,12 +87,12 @@ func main() {
 	host := "localhost"
 	dk := util.GetDockerComposeYml("../../docker-compose.yml")
 
-	authToken := "yA1dAZx9t-fn7J4fCryJurEdVC8xPQM0esSqftx6hpfT0JST0BfEnCnbFKO5lxrE-ilZBxpvTSKfK0eLsrdWaQ=="
-	// authToken = "lAAs7a0buXNb88a4rb_ZKB1M9SxKqHKvGl_fSkwKAAIH-80NAw4SbzEpOPAWUgqr_KlxgurP4cNqolHggmN0pg=="
+	// authToken := "yA1dAZx9t-fn7J4fCryJurEdVC8xPQM0esSqftx6hpfT0JST0BfEnCnbFKO5lxrE-ilZBxpvTSKfK0eLsrdWaQ=="
+	// authToken := "lAAs7a0buXNb88a4rb_ZKB1M9SxKqHKvGl_fSkwKAAIH-80NAw4SbzEpOPAWUgqr_KlxgurP4cNqolHggmN0pg=="
 	displayDB := database.NewInfluxDB(
 		host, dk.Services.Influxdb.PortSrc,
 		dk.Services.Influxdb.Env.Username, dk.Services.Influxdb.Env.Password,
-		authToken,
+		dk.Services.Influxdb.Env.AdminToken,
 		dk.Services.Influxdb.Env.Org, dk.Services.Influxdb.Env.Bucket,
 		false,
 	)

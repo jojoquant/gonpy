@@ -45,6 +45,7 @@ services:
       DOCKER_INFLUXDB_INIT_PASSWORD: gonpygonpy
       DOCKER_INFLUXDB_INIT_ORG: myorg 
       DOCKER_INFLUXDB_INIT_BUCKET: mybucket
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: need-to-modify-this-token
     restart: always
 
   grafana:

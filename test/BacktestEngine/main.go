@@ -38,11 +38,11 @@ func main() {
 		host, dk.Services.Mongo.PortSrc,
 		dk.Services.Mongo.Env.Username, dk.Services.Mongo.Env.Password)
 
-	authToken := "yA1dAZx9t-fn7J4fCryJurEdVC8xPQM0esSqftx6hpfT0JST0BfEnCnbFKO5lxrE-ilZBxpvTSKfK0eLsrdWaQ=="
+	// authToken := "yA1dAZx9t-fn7J4fCryJurEdVC8xPQM0esSqftx6hpfT0JST0BfEnCnbFKO5lxrE-ilZBxpvTSKfK0eLsrdWaQ=="
 	displayDB := database.NewInfluxDB(
 		host, dk.Services.Influxdb.PortSrc,
 		dk.Services.Influxdb.Env.Username, dk.Services.Influxdb.Env.Password,
-		authToken,
+		dk.Services.Influxdb.Env.AdminToken,
 		dk.Services.Influxdb.Env.Org, dk.Services.Influxdb.Env.Bucket,
 		false,
 	)
