@@ -1,7 +1,16 @@
 version: '3'
 
 services:
-
+  rabbitmq:
+    image: "rabbitmq:3-management"
+    ports: 
+      - 5672:5672
+      - 15672:15672
+    networks:
+      - gonpy_net
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: gonpy
   mongo:
     image: mongo:latest
     environment:
@@ -48,17 +57,17 @@ services:
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: need-to-modify-this-token
     restart: always
 
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - 3001:3000
-    networks:
-      - gonpy_net
-    volumes:
-      - grafana_volume:/var/lib/grafana
-    depends_on:
-      - influxdb
-    restart: always
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   ports:
+  #     - 3001:3000
+  #   networks:
+  #     - gonpy_net
+  #   volumes:
+  #     - grafana_volume:/var/lib/grafana
+  #   depends_on:
+  #     - influxdb
+  #   restart: always
 
 
 networks:
@@ -68,4 +77,4 @@ networks:
 volumes:
   influxdb_volume:
   mongodb_volume:
-  grafana_volume:
+  # grafana_volume:
